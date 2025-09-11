@@ -290,37 +290,10 @@ def schedule_next_post(cl: Client):
     schedule.clear()
     schedule.every(delay).seconds.do(lambda: create_and_post(cl))
 
+
 # ------------------------------------------------------------------------------
 # Main
 # ------------------------------------------------------------------------------
-
-def main():
-    cl = Client()
-    cl.delay_range = [1, 3]
-
-    try:
-        cl.load_settings("session.json")
-    except FileNotFoundError:
-        logger.info("No existing session file found")
-
-    if not login_user(cl):
-        logger.error("Failed to login. Check your credentials in .env file")
-        return
-
-    logger.info("Bot started ✅")
-    logger.info("Posting immediately to verify setup...")
-    create_and_post(cl)
-
-    while True:
-        try:
-            schedule.run_pending()
-            time.sleep(60)
-        except Exception as e:
-            logger.error(f"Error in scheduler loop: {e}")
-            time.sleep(300)
-
-if __name__ == "__main__":
-    main()
 
 def main():
     keep_alive()  # Start the keep-alive server
@@ -348,6 +321,7 @@ def main():
         except Exception as e:
             logger.error(f"Error in scheduler loop: {e}")
             time.sleep(300)
+
 
 if __name__ == "__main__":
     main()
