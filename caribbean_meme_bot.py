@@ -9,26 +9,7 @@ import logging
 import schedule
 import textwrap
 from datetime import datetime, timedelta
-
-# Add these imports for the keep-alive server
-from flask import Flask
 from threading import Thread
-import os
-
-app = Flask('')
-
-@app.route('/')
-def home():
-    return "Python Bot is alive!"
-
-def run():
-    port = int(os.environ.get('PORT', 10000))
-    app.run(host='0.0.0.0', port=port)
-
-def keep_alive():
-    t = Thread(target=run)
-    t.start()
-
 
 # Pillow (image generation)
 from PIL import Image, ImageDraw, ImageFont
@@ -39,6 +20,28 @@ from instagrapi.exceptions import LoginRequired
 
 # Environment variables
 from dotenv import load_dotenv
+
+# Flask for keep-alive server
+from flask import Flask
+
+# ------------------------------------------------------------------------------
+# Flask keep-alive server
+# ------------------------------------------------------------------------------
+
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "Python Bot is alive!"
+
+def run_flask():
+    port = int(os.environ.get('PORT', 10000))
+    app.run(host='0.0.0.0', port=port)
+
+def keep_alive():
+    t = Thread(target=run_flask)
+    t.daemon = True
+    t.start()
 
 # ------------------------------------------------------------------------------
 # Setup
@@ -220,6 +223,16 @@ def get_random_peak_time() -> datetime:
         post_time += timedelta(days=1)
     return post_time
 
+
+def prepare_image(path: str, out_path: str) -> str:
+    """Resize image to 1080x1350 for Instagram feed posts."""
+    img = Image.open(path)
+    img = img.convert("RGB")
+    target_size = (1080, 1350)  # Instagram 4:5 ratio
+    img = img.resize(target_size, Image.LANCZOS)
+    img.save(out_path, "JPEG", quality=95)
+    return out_path
+
 # ------------------------------------------------------------------------------
 # Posting Logic
 # ------------------------------------------------------------------------------
@@ -243,25 +256,27 @@ def create_and_post(cl: Client):
             else:
                 content, ctype = random.choice(trivia_list), "trivia"
 
-            image_path = create_twitter_style_image(content, ctype, f"post_{int(time.time())}.jpg")
+            raw_image_path = create_twitter_style_image(content, ctype, f"post_{int(time.time())}.jpg")
+            prepared_path = prepare_image(raw_image_path, f"prepared_{int(time.time())}.jpg")
             caption = f"{content}\n\n{get_peak_hashtags()}"
 
             try:
-                cl.photo_upload(image_path, caption)
+                cl.photo_upload(prepared_path, caption)
                 logger.info(f"Posted: {content[:50]}...")
             except Exception as e:
                 logger.error(f"Failed to upload: {e}")
                 if login_user(cl):
                     try:
-                        cl.photo_upload(image_path, caption)
+                        cl.photo_upload(prepared_path, caption)
                         logger.info(f"Posted after relogin: {content[:50]}...")
                     except Exception as e2:
                         logger.error(f"Failed again after relogin: {e2}")
                 continue
 
             try:
-                os.remove(image_path)
-                logger.info(f"Removed temporary image: {image_path}")
+                os.remove(raw_image_path)
+                os.remove(prepared_path)
+                logger.info(f"Removed temporary images: {raw_image_path}, {prepared_path}")
             except:
                 pass
 
@@ -289,7 +304,6 @@ def schedule_next_post(cl: Client):
 
     schedule.clear()
     schedule.every(delay).seconds.do(lambda: create_and_post(cl))
-
 
 # ------------------------------------------------------------------------------
 # Main
@@ -321,7 +335,6 @@ def main():
         except Exception as e:
             logger.error(f"Error in scheduler loop: {e}")
             time.sleep(300)
-
 
 if __name__ == "__main__":
     main()
