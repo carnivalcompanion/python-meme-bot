@@ -1,0 +1,14 @@
+# Environment files
+.env
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Session files
+session.json
+
+# Logs and temp files
+*.log
+test_post.jpg
