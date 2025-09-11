@@ -1,0 +1,4 @@
+Pillow==9.5.0
+instagrapi==1.16.22
+python-dotenv==1.0.0
+schedule==1.2.0
