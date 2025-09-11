@@ -225,13 +225,26 @@ def get_random_peak_time() -> datetime:
 
 
 def prepare_image(path: str, out_path: str) -> str:
-    """Resize image to 1080x1350 for Instagram feed posts."""
-    img = Image.open(path)
-    img = img.convert("RGB")
-    target_size = (1080, 1350)  # Instagram 4:5 ratio
-    img = img.resize(target_size, Image.LANCZOS)
-    img.save(out_path, "JPEG", quality=95)
+    """Prepare image for Instagram 4:5 aspect ratio without distortion."""
+    img = Image.open(path).convert("RGB")
+
+    # Instagram portrait size
+    target_w, target_h = 1080, 1350
+
+    # Scale to fit inside the box while preserving aspect ratio
+    img.thumbnail((target_w, target_h), Image.LANCZOS)
+
+    # Create background canvas (black or white — here black for contrast)
+    new_img = Image.new("RGB", (target_w, target_h), (0, 0, 0))
+
+    # Center the original image
+    offset_x = (target_w - img.width) // 2
+    offset_y = (target_h - img.height) // 2
+    new_img.paste(img, (offset_x, offset_y))
+
+    new_img.save(out_path, "JPEG", quality=95)
     return out_path
+
 
 # ------------------------------------------------------------------------------
 # Posting Logic
