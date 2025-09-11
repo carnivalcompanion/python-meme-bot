@@ -224,26 +224,91 @@ def get_random_peak_time() -> datetime:
     return post_time
 
 
-def prepare_image(path: str, out_path: str) -> str:
-    """Prepare image for Instagram 4:5 aspect ratio without distortion."""
-    img = Image.open(path).convert("RGB")
+def create_twitter_style_image(text: str, content_type: str, output_path="post.jpg") -> str:
+    """Generate a Twitter/X-style post image."""
+    # Use Instagram's preferred 4:5 aspect ratio
+    width, height = 1080, 1350
+    image = Image.new("RGB", (width, height), TWITTER_BG)
+    draw = ImageDraw.Draw(image)
 
-    # Instagram portrait size
-    target_w, target_h = 1080, 1350
+    # Fonts
+    try:
+        name_font = ImageFont.truetype("Arial Bold", 42)
+        handle_font = ImageFont.truetype("Arial", 32)
+        text_font = ImageFont.truetype("Arial", 38)
+        small_font = ImageFont.truetype("Arial", 30)
+        engagement_font = ImageFont.truetype("Arial", 28)
+    except:
+        try:
+            name_font = ImageFont.truetype("arialbd.ttf", 42)
+            handle_font = ImageFont.truetype("arial.ttf", 32)
+            text_font = ImageFont.truetype("arial.ttf", 38)
+            small_font = ImageFont.truetype("arial.ttf", 30)
+            engagement_font = ImageFont.truetype("arial.ttf", 28)
+        except:
+            # Fallback to default font
+            name_font = ImageFont.load_default()
+            handle_font = ImageFont.load_default()
+            text_font = ImageFont.load_default()
+            small_font = ImageFont.load_default()
+            engagement_font = ImageFont.load_default()
 
-    # Scale to fit inside the box while preserving aspect ratio
-    img.thumbnail((target_w, target_h), Image.LANCZOS)
+    # Wrap text for Twitter/X style
+    wrapped_lines = textwrap.wrap(text, width=38)
+    
+    # Profile section (top)
+    profile_section_height = 150
+    
+    # Profile image
+    profile_size = 80
+    profile_x = 50
+    profile_y = 50
+    
+    try:
+        pfp_path = os.path.join(os.path.dirname(__file__), PROFILE_IMG)
+        pfp = Image.open(pfp_path).convert("RGB").resize((profile_size, profile_size))
+        mask = Image.new("L", (profile_size, profile_size), 0)
+        ImageDraw.Draw(mask).ellipse((0, 0, profile_size, profile_size), fill=255)
+        image.paste(pfp, (profile_x, profile_y), mask)
+    except Exception as e:
+        logger.error(f"⚠️ Could not load profile image: {e}")
+        draw.ellipse([profile_x, profile_y, profile_x + profile_size, profile_y + profile_size], fill=TWITTER_BLUE)
 
-    # Create background canvas (black or white — here black for contrast)
-    new_img = Image.new("RGB", (target_w, target_h), (0, 0, 0))
+    # Name + handle
+    draw.text((profile_x + profile_size + 20, profile_y + 10), "Carnival Companion", fill=TWITTER_TEXT, font=name_font)
+    draw.text((profile_x + profile_size + 20, profile_y + 55), "@CarnivalCompanion · 2h", fill=TWITTER_MUTED, font=handle_font)
 
-    # Center the original image
-    offset_x = (target_w - img.width) // 2
-    offset_y = (target_h - img.height) // 2
-    new_img.paste(img, (offset_x, offset_y))
+    # Post text
+    text_start_y = profile_section_height + 20
+    y_text = text_start_y
+    
+    for line in wrapped_lines:
+        draw.text((50, y_text), line, font=text_font, fill=TWITTER_TEXT)
+        y_text += text_font.size + 15
 
-    new_img.save(out_path, "JPEG", quality=95)
-    return out_path
+    # Engagement section (bottom)
+    engagement_y = height - 120
+    likes = random.randint(500, 5000)
+    retweets = random.randint(500, 5000)
+
+    # Likes (heart icon)
+    heart_x, heart_y = 50, engagement_y
+    draw.ellipse([heart_x, heart_y, heart_x + 30, heart_y + 30], fill="red", outline="red")
+    draw.text((heart_x + 40, heart_y), f"{likes:,}", fill=TWITTER_MUTED, font=engagement_font)
+
+    # Retweets (circular arrows icon)
+    retweet_x = 200
+    draw.arc([retweet_x, heart_y, retweet_x + 30, heart_y + 30], 0, 360, fill=TWITTER_MUTED, width=3)
+    draw.arc([retweet_x + 10, heart_y + 10, retweet_x + 20, heart_y + 20], 0, 360, fill=TWITTER_MUTED, width=2)
+    draw.text((retweet_x + 40, heart_y), f"{retweets:,}", fill=TWITTER_MUTED, font=engagement_font)
+
+    # Hashtags
+    hashtags_y = engagement_y + 50
+    draw.text((50, hashtags_y), get_peak_hashtags(), fill=TWITTER_BLUE, font=small_font)
+
+    image.save(output_path)
+    logger.info(f"Created image: {output_path}")
+    return output_path
 
 
 # ------------------------------------------------------------------------------
