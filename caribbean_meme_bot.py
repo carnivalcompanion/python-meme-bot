@@ -119,26 +119,113 @@ def get_peak_hashtags() -> str:
     return " ".join(random.sample(CARIBBEAN_HASHTAGS, 4)) + " #CarnivalCompanion"
 
 
+def create_twitter_style_image(text: str, content_type: str, output_path="post.jpg") -> str:
+    """Generate a Twitter-style post image."""
+    width, height = 1080, 1080
+    image = Image.new("RGB", (width, height), TWITTER_BG)
+    draw = ImageDraw.Draw(image)
+
+    # Fonts
+    try:
+        name_font = ImageFont.truetype("Arial Bold", 36)
+        handle_font = ImageFont.truetype("Arial", 28)
+        text_font = ImageFont.truetype("Arial", 34)
+        small_font = ImageFont.truetype("Arial", 26)
+    except:
+        try:
+            name_font = ImageFont.truetype("arialbd.ttf", 36)
+            handle_font = ImageFont.truetype("arial.ttf", 28)
+            text_font = ImageFont.truetype("arial.ttf", 34)
+            small_font = ImageFont.truetype("arial.ttf", 26)
+        except:
+            name_font = handle_font = text_font = small_font = ImageFont.load_default()
+
+    # Wrap text
+    wrapped_lines = textwrap.wrap(text, width=45)
+
+    # Measure widths
+    text_widths = [draw.textlength(line, font=text_font) for line in wrapped_lines]
+    max_text_width = max(text_widths) if text_widths else 0
+    name_w = draw.textlength("Carnival Companion", font=name_font)
+    handle_w = draw.textlength("@CarnivalCompanion · 2h", font=handle_font)
+    header_width = max(name_w, handle_w) + 120
+
+    likes_text = f"{random.randint(500,5000):,}"
+    rts_text = f"{random.randint(500,5000):,}"
+    likes_w = draw.textlength(likes_text, font=small_font) + 120
+    rts_w = draw.textlength(rts_text, font=small_font) + 300
+    engagement_width = max(likes_w, rts_w)
+
+    block_width = max(max_text_width, header_width, engagement_width)
+    offset_x = int((width - block_width) // 2)
+
+    # Profile image
+    try:
+        pfp_path = os.path.join(os.path.dirname(__file__), PROFILE_IMG)
+        pfp = Image.open(pfp_path).convert("RGB").resize((100, 100))
+        mask = Image.new("L", (100, 100), 0)
+        ImageDraw.Draw(mask).ellipse((0, 0, 100, 100), fill=255)
+        image.paste(pfp, (offset_x, 140), mask)
+    except Exception as e:
+        logger.error(f"⚠️ Could not load profile image: {e}")
+        draw.ellipse([offset_x, 140, offset_x + 100, 240], fill=TWITTER_BLUE)
+
+    # Name + handle
+    draw.text((offset_x + 120, 145), "Carnival Companion", fill=TWITTER_TEXT, font=name_font)
+    draw.text((offset_x + 120, 185), "@CarnivalCompanion · 2h", fill=TWITTER_MUTED, font=handle_font)
+
+    # Post text
+    y_text = 280
+    for line in wrapped_lines:
+        draw.text((offset_x, y_text), line, font=text_font, fill=TWITTER_TEXT)
+        y_text += text_font.size + 10
+
+    # Engagement
+    y = 850
+    likes = random.randint(500, 5000)
+    retweets = random.randint(500, 5000)
+
+    heart_x, heart_y = offset_x + 50, y
+    draw.polygon(
+        [
+            (heart_x, heart_y + 20),
+            (heart_x + 15, heart_y),
+            (heart_x + 30, heart_y + 20),
+            (heart_x + 15, heart_y + 40),
+        ],
+        fill=TWITTER_MUTED,
+    )
+    draw.text((heart_x + 60, y), f"{likes:,}", fill=TWITTER_MUTED, font=small_font)
+
+    rt_x, rt_y = offset_x + 300, y + 10
+    draw.line([(rt_x, rt_y), (rt_x + 35, rt_y)], fill=TWITTER_MUTED, width=3)
+    draw.polygon([(rt_x + 35, rt_y), (rt_x + 30, rt_y - 5), (rt_x + 30, rt_y + 5)], fill=TWITTER_MUTED)
+    draw.line([(rt_x, rt_y + 20), (rt_x + 35, rt_y + 20)], fill=TWITTER_MUTED, width=3)
+    draw.polygon([(rt_x, rt_y + 20), (rt_x + 5, rt_y + 15), (rt_x + 5, rt_y + 25)], fill=TWITTER_MUTED)
+    draw.text((rt_x + 60, y), f"{retweets:,}", fill=TWITTER_MUTED, font=small_font)
+
+    # Hashtags
+    draw.text((offset_x, height - 80), get_peak_hashtags(), fill=TWITTER_BLUE, font=small_font)
+
+    image.save(output_path)
+    logger.info(f"Created image: {output_path}")
+    return output_path
+
+
 def prepare_image(image_path: str, caption_text: str, output_path: str) -> str:
     """
-    Prepare an image for posting by adding caption/text overlay
+    Prepare an image for Instagram: resize 4:5 and add caption overlay.
     """
     try:
-        # Open the image
         image = Image.open(image_path)
-        
-        # Convert to RGB if necessary (for JPEG compatibility)
-        if image.mode != 'RGB':
-            image = image.convert('RGB')
-        
-        # Resize to Instagram's preferred 4:5 ratio
+        if image.mode != "RGB":
+            image = image.convert("RGB")
+
+        # Resize to Instagram 4:5 (portrait)
         target_size = (1080, 1350)
         image = image.resize(target_size, Image.LANCZOS)
-        
-        # Create a drawing context
+
         draw = ImageDraw.Draw(image)
-        
-        # Choose a font
         try:
             font = ImageFont.truetype("arial.ttf", 36)
         except:
@@ -146,147 +233,28 @@ def prepare_image(image_path: str, caption_text: str, output_path: str) -> str:
                 font = ImageFont.truetype("arialbd.ttf", 36)
             except:
                 font = ImageFont.load_default()
-                logger.warning("Using default font - arial.ttf not found")
-        
-        # Add text/caption to the bottom of the image
-        # Wrap text to fit image width
-        max_width = image.width - 100  # 50px padding on each side
+
+        # Wrap caption text
         wrapped_lines = textwrap.wrap(caption_text, width=30)
-        
-        # Calculate text position (bottom of image)
         line_height = font.size + 10
         total_text_height = len(wrapped_lines) * line_height
         text_y = image.height - total_text_height - 50
-        
-        # Add text with outline for better visibility
+
         for line in wrapped_lines:
-            # Outline (draw multiple times with offset)
+            # outline
             for x_offset in [-2, -1, 1, 2]:
                 for y_offset in [-2, -1, 1, 2]:
-                    draw.text((50 + x_offset, text_y + y_offset), line, 
-                             font=font, fill="black")
-            
-            # Main text
+                    draw.text((50 + x_offset, text_y + y_offset), line, font=font, fill="black")
             draw.text((50, text_y), line, font=font, fill="white")
             text_y += line_height
-        
-        # Save the prepared image
+
         image.save(output_path, "JPEG", quality=95)
         logger.info(f"Prepared image saved: {output_path}")
-        
         return output_path
-        
+
     except Exception as e:
         logger.error(f"Error preparing image: {e}")
-        # Fallback: just resize the original image
-        try:
-            img = Image.open(image_path)
-            img = img.convert("RGB")
-            target_size = (1080, 1350)
-            img = img.resize(target_size, Image.LANCZOS)
-            img.save(output_path, "JPEG", quality=95)
-            return output_path
-        except:
-            return image_path
-
-
-def create_twitter_style_image(text: str, content_type: str, output_path="post.jpg") -> str:
-    """Generate a Twitter/X-style post image."""
-    # Use Instagram's preferred 4:5 aspect ratio
-    width, height = 1080, 1350
-    image = Image.new("RGB", (width, height), TWITTER_BG)
-    draw = ImageDraw.Draw(image)
-
-    # Fonts
-    try:
-        name_font = ImageFont.truetype("Arial Bold", 42)
-        handle_font = ImageFont.truetype("Arial", 32)
-        text_font = ImageFont.truetype("Arial", 38)
-        small_font = ImageFont.truetype("Arial", 30)
-        engagement_font = ImageFont.truetype("Arial", 28)
-    except:
-        try:
-            name_font = ImageFont.truetype("arialbd.ttf", 42)
-            handle_font = ImageFont.truetype("arial.ttf", 32)
-            text_font = ImageFont.truetype("arial.ttf", 38)
-            small_font = ImageFont.truetype("arial.ttf", 30)
-            engagement_font = ImageFont.truetype("arial.ttf", 28)
-        except:
-            # Fallback to default font
-            name_font = ImageFont.load_default()
-            handle_font = ImageFont.load_default()
-            text_font = ImageFont.load_default()
-            small_font = ImageFont.load_default()
-            engagement_font = ImageFont.load_default()
-
-    # Wrap text for Twitter/X style
-    wrapped_lines = textwrap.wrap(text, width=38)
-    
-    # Profile section (top)
-    profile_section_height = 150
-    
-    # Profile image
-    profile_size = 80
-    profile_x = 50
-    profile_y = 50
-    
-    try:
-        pfp_path = os.path.join(os.path.dirname(__file__), PROFILE_IMG)
-        pfp = Image.open(pfp_path).convert("RGB").resize((profile_size, profile_size))
-        mask = Image.new("L", (profile_size, profile_size), 0)
-        ImageDraw.Draw(mask).ellipse((0, 0, profile_size, profile_size), fill=255)
-        image.paste(pfp, (profile_x, profile_y), mask)
-    except Exception as e:
-        logger.error(f"⚠️ Could not load profile image: {e}")
-        draw.ellipse([profile_x, profile_y, profile_x + profile_size, profile_y + profile_size], fill=TWITTER_BLUE)
-
-    # Name + handle
-    draw.text((profile_x + profile_size + 20, profile_y + 10), "Carnival Companion", fill=TWITTER_TEXT, font=name_font)
-    draw.text((profile_x + profile_size + 20, profile_y + 55), "@CarnivalCompanion · 2h", fill=TWITTER_MUTED, font=handle_font)
-
-    # Post text
-    text_start_y = profile_section_height + 20
-    y_text = text_start_y
-    
-    for line in wrapped_lines:
-        draw.text((50, y_text), line, font=text_font, fill=TWITTER_TEXT)
-        y_text += text_font.size + 15
-
-    # Engagement section (bottom)
-    engagement_y = height - 120
-    likes = random.randint(500, 5000)
-    retweets = random.randint(500, 5000)
-
-    # Likes (heart icon)
-    heart_x, heart_y = 50, engagement_y
-    draw.ellipse([heart_x, heart_y, heart_x + 30, heart_y + 30], fill="red", outline="red")
-    draw.text((heart_x + 40, heart_y), f"{likes:,}", fill=TWITTER_MUTED, font=engagement_font)
-
-    # Retweets (circular arrows icon)
-    retweet_x = 200
-    draw.arc([retweet_x, heart_y, retweet_x + 30, heart_y + 30], 0, 360, fill=TWITTER_MUTED, width=3)
-    draw.arc([retweet_x + 10, heart_y + 10, retweet_x + 20, heart_y + 20], 0, 360, fill=TWITTER_MUTED, width=2)
-    draw.text((retweet_x + 40, heart_y), f"{retweets:,}", fill=TWITTER_MUTED, font=engagement_font)
-
-    # Hashtags
-    hashtags_y = engagement_y + 50
-    draw.text((50, hashtags_y), get_peak_hashtags(), fill=TWITTER_BLUE, font=small_font)
-
-    image.save(output_path)
-    logger.info(f"Created Twitter-style image: {output_path}")
-    return output_path
-
-
-def get_random_peak_time() -> datetime:
-    now = datetime.now()
-    peak_windows = [(9, 11), (17, 19), (20, 22)]
-    start, end = random.choice(peak_windows)
-    hour = random.randint(start, end - 1)
-    minute = random.randint(0, 59)
-    post_time = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
-    if post_time <= now:
-        post_time += timedelta(days=1)
-    return post_time
+        return image_path
 
 # ------------------------------------------------------------------------------
 # Posting Logic
@@ -311,13 +279,9 @@ def create_and_post(cl: Client):
             else:
                 content, ctype = random.choice(trivia_list), "trivia"
 
-            # Create Twitter-style image
             timestamp = int(time.time())
             raw_image_path = create_twitter_style_image(content, ctype, f"post_{timestamp}.jpg")
-            
-            # Prepare the image with text overlay (this is where the error was)
             prepared_path = prepare_image(raw_image_path, content, f"prepared_{timestamp}.jpg")
-            
             caption = f"{content}\n\n{get_peak_hashtags()}"
 
             try:
@@ -333,13 +297,12 @@ def create_and_post(cl: Client):
                         logger.error(f"Failed again after relogin: {e2}")
                 continue
 
-            # Clean up temporary files
             try:
                 os.remove(raw_image_path)
                 os.remove(prepared_path)
                 logger.info(f"Removed temporary images: {raw_image_path}, {prepared_path}")
-            except Exception as e:
-                logger.warning(f"Could not remove temp files: {e}")
+            except:
+                pass
 
             if i < post_count - 1:
                 delay = random.randint(1800, 3600)
