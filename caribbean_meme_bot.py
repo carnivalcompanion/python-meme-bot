@@ -60,11 +60,11 @@ TRIVIA_FILE = "trivia.txt"
 SLANG_FILE = "slang.txt"
 PROFILE_IMG = "placeholder.jpg"
 
-# Colors for Instagram-style images
-INSTAGRAM_BG = (255, 255, 255)  # White background
-INSTAGRAM_TEXT = (0, 0, 0)      # Black text
-INSTAGRAM_MUTED = (142, 142, 142)  # Gray text
-INSTAGRAM_BLUE = (56, 151, 240)    # Instagram blue
+# Colors (Twitter dark mode)
+TWITTER_BG = (21, 32, 43)
+TWITTER_TEXT = (255, 255, 255)
+TWITTER_MUTED = (136, 153, 166)
+TWITTER_BLUE = (29, 161, 242)
 
 # Hashtags
 CARIBBEAN_HASHTAGS = [
@@ -119,32 +119,29 @@ def get_peak_hashtags() -> str:
     return " ".join(random.sample(CARIBBEAN_HASHTAGS, 4)) + " #CarnivalCompanion"
 
 
-def create_instagram_style_image(text: str, content_type: str, output_path="post.jpg") -> str:
-    """Generate an Instagram-style post image (1080x1080 square)."""
-    width, height = 1080, 1080  # Square format for Instagram
-    image = Image.new("RGB", (width, height), INSTAGRAM_BG)
+def create_twitter_style_image(text: str, content_type: str, output_path="post.jpg") -> str:
+    """Generate a Twitter-style post image (1080x1080 square with Twitter blue theme)."""
+    width, height = 1080, 1080  # Square format
+    image = Image.new("RGB", (width, height), TWITTER_BG)
     draw = ImageDraw.Draw(image)
 
     # Fonts - using larger sizes for better readability
     try:
-        # Try to load fonts - adjust these based on what's available on your system
-        name_font = ImageFont.truetype("arialbd.ttf", 42)
-        handle_font = ImageFont.truetype("arial.ttf", 34)
-        text_font = ImageFont.truetype("arial.ttf", 46)  # Larger text size
-        small_font = ImageFont.truetype("arial.ttf", 32)
-        engagement_font = ImageFont.truetype("arial.ttf", 28)
+        name_font = ImageFont.truetype("arialbd.ttf", 60)
+        handle_font = ImageFont.truetype("arial.ttf", 44)
+        text_font = ImageFont.truetype("arial.ttf", 58)
+        small_font = ImageFont.truetype("arial.ttf", 40)
     except:
         # Fallback to default fonts if custom ones aren't available
         name_font = ImageFont.load_default()
         handle_font = ImageFont.load_default()
         text_font = ImageFont.load_default()
         small_font = ImageFont.load_default()
-        engagement_font = ImageFont.load_default()
 
     # Profile section at top
-    profile_size = 80
-    profile_x = 40
-    profile_y = 40
+    profile_size = 100
+    profile_x = 80
+    profile_y = 80
 
     # Draw profile picture (circle)
     try:
@@ -155,58 +152,49 @@ def create_instagram_style_image(text: str, content_type: str, output_path="post
         image.paste(pfp, (profile_x, profile_y), mask)
     except Exception as e:
         logger.error(f"⚠️ Could not load profile image: {e}")
-        draw.ellipse([profile_x, profile_y, profile_x + profile_size, profile_y + profile_size], fill=INSTAGRAM_BLUE)
+        draw.ellipse([profile_x, profile_y, profile_x + profile_size, profile_y + profile_size], fill=TWITTER_BLUE)
 
     # Account name and handle
-    draw.text((profile_x + profile_size + 15, profile_y + 5), "carnivalcompanion", fill=INSTAGRAM_TEXT, font=name_font)
-    draw.text((profile_x + profile_size + 15, profile_y + 45), "@carnivalcompanion", fill=INSTAGRAM_MUTED, font=handle_font)
-
-    # More options icon (three dots)
-    options_x = width - 50
-    draw.ellipse([options_x, profile_y + 15, options_x + 4, profile_y + 19], fill=INSTAGRAM_TEXT)
-    draw.ellipse([options_x, profile_y + 25, options_x + 4, profile_y + 29], fill=INSTAGRAM_TEXT)
-    draw.ellipse([options_x, profile_y + 35, options_x + 4, options_x + 39], fill=INSTAGRAM_TEXT)
+    draw.text((profile_x + profile_size + 20, profile_y + 10), "Carnival Companion", fill=TWITTER_TEXT, font=name_font)
+    draw.text((profile_x + profile_size + 20, profile_y + 70), "@CarnivalCompanion · 2h", fill=TWITTER_MUTED, font=handle_font)
 
     # Post content - centered with proper spacing
-    content_x = 40
-    content_y = profile_y + profile_size + 50
+    content_x = profile_x
+    content_y = profile_y + profile_size + 60
     
     # Wrap text to fit within image width
-    wrapped_lines = textwrap.wrap(text, width=35)  # Adjust character count for line breaks
+    wrapped_lines = textwrap.wrap(text, width=30)  # Fewer characters for larger font
     
     # Draw each line of text
     for line in wrapped_lines:
-        draw.text((content_x, content_y), line, font=text_font, fill=INSTAGRAM_TEXT)
-        content_y += text_font.size + 15  # Increase line spacing
+        # Center each line of text
+        line_width = text_font.getlength(line)
+        line_x = (width - line_width) // 2
+        draw.text((line_x, content_y), line, font=text_font, fill=TWITTER_TEXT)
+        content_y += text_font.size + 20  # Increase line spacing
 
-    # Engagement section (likes, comments, etc.)
-    engagement_y = content_y + 40
+    # Engagement section (likes, retweets)
+    engagement_y = content_y + 60
     
-    # Likes count
+    # Likes
     likes = random.randint(500, 5000)
-    draw.text((content_x, engagement_y), f"{likes:,}", fill=INSTAGRAM_TEXT, font=engagement_font)
+    likes_x = width // 2 - 150
+    draw.text((likes_x, engagement_y), f"{likes:,}", fill=TWITTER_MUTED, font=small_font)
     
-    # Comments icon and count
-    comments = random.randint(10, 500)
-    draw.text((content_x + 100, engagement_y), f"{comments}", fill=INSTAGRAM_TEXT, font=engagement_font)
-    
-    # Share icon (paper airplane)
-    draw.text((content_x + 200, engagement_y), "314", fill=INSTAGRAM_TEXT, font=engagement_font)  # Static share count
-    
-    # Bookmark icon
-    bookmark_x = width - 50
-    draw.rectangle([bookmark_x, engagement_y, bookmark_x + 20, engagement_y + 25], outline=INSTAGRAM_TEXT, width=2)
+    # Retweets
+    retweets = random.randint(500, 5000)
+    retweets_x = width // 2 + 50
+    draw.text((retweets_x, engagement_y), f"{retweets:,}", fill=TWITTER_MUTED, font=small_font)
 
-    # Timestamp and location
-    timestamp_y = engagement_y + 40
-    draw.text((content_x, timestamp_y), "2 hours ago", fill=INSTAGRAM_MUTED, font=small_font)
-    
-    # Add some hashtags at the bottom
-    hashtag_y = timestamp_y + 40
-    draw.text((content_x, hashtag_y), get_peak_hashtags(), fill=INSTAGRAM_BLUE, font=small_font)
+    # Hashtags at the bottom
+    hashtag_y = engagement_y + 80
+    hashtags = get_peak_hashtags()
+    hashtag_width = small_font.getlength(hashtags)
+    hashtag_x = (width - hashtag_width) // 2
+    draw.text((hashtag_x, hashtag_y), hashtags, fill=TWITTER_BLUE, font=small_font)
 
     image.save(output_path)
-    logger.info(f"Created Instagram-style image: {output_path}")
+    logger.info(f"Created Twitter-style image: {output_path}")
     return output_path
 
 
@@ -275,8 +263,8 @@ def create_and_post(cl: Client):
             else:
                 content, ctype = random.choice(trivia_list), "trivia"
 
-            # Create the Instagram-style image
-            image_path = create_instagram_style_image(content, ctype, f"post_{int(time.time())}.jpg")
+            # Create the Twitter-style image
+            image_path = create_twitter_style_image(content, ctype, f"post_{int(time.time())}.jpg")
             
             # For Instagram, we'll use just hashtags in the caption
             caption = get_peak_hashtags()
