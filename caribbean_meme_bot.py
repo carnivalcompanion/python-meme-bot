@@ -75,7 +75,6 @@ CARIBBEAN_HASHTAGS = [
     "#CaribbeanTravel", "#CaribbeanStyle", "#CaribbeanLife",
     "#CaribbeanVibes", "#WestIndies", "#IslandTime", "#CaribbeanDream"
 ]
-
 # ------------------------------------------------------------------------------
 # Helpers
 # ------------------------------------------------------------------------------
@@ -207,13 +206,44 @@ def create_twitter_style_image(text: str, content_type: str, output_path="post.j
     return output_path
 
 
+def prepare_image(path: str, out_path: str) -> str:
+    """Crop + resize image to 1080x1350 for Instagram feed posts."""
+    img = Image.open(path).convert("RGB")
+
+    target_w, target_h = 1080, 1350
+    aspect_ratio = target_w / target_h  # 0.8
+
+    # Current aspect ratio
+    w, h = img.size
+    current_ratio = w / h
+
+    if current_ratio > aspect_ratio:
+        # Image too wide → crop width
+        new_w = int(h * aspect_ratio)
+        left = (w - new_w) // 2
+        right = left + new_w
+        img = img.crop((left, 0, right, h))
+    else:
+        # Image too tall → crop height
+        new_h = int(w / aspect_ratio)
+        top = (h - new_h) // 2
+        bottom = top + new_h
+        img = img.crop((0, top, w, bottom))
+
+    # Final resize to 1080x1350
+    img = img.resize((target_w, target_h), Image.LANCZOS)
+    img.save(out_path, "JPEG", quality=95)
+    return out_path
+
+
 # ------------------------------------------------------------------------------
 # Posting Logic
 # ------------------------------------------------------------------------------
 
 def get_random_peak_time() -> datetime:
+    """Return a random peak posting time for the next day if needed."""
     now = datetime.now()
-    peak_windows = [(9, 11), (17, 19), (20, 22)]
+    peak_windows = [(9, 11), (17, 19), (20, 22)]  # morning, evening, late
     start, end = random.choice(peak_windows)
     hour = random.randint(start, end - 1)
     minute = random.randint(0, 59)
@@ -242,25 +272,34 @@ def create_and_post(cl: Client):
             else:
                 content, ctype = random.choice(trivia_list), "trivia"
 
-            image_path = create_twitter_style_image(content, ctype, f"post_{int(time.time())}.jpg")
+            # Create and prepare the image
+            raw_image_path = create_twitter_style_image(content, ctype, f"post_{int(time.time())}.jpg")
+            prepared_path = prepare_image(raw_image_path, f"prepared_{int(time.time())}.jpg")
             caption = f"{content}\n\n{get_peak_hashtags()}"
 
             try:
-                cl.photo_upload(image_path, caption)
+                cl.photo_upload(prepared_path, caption)
                 logger.info(f"Posted: {content[:50]}...")
             except Exception as e:
                 logger.error(f"Failed to upload: {e}")
                 if login_user(cl):
                     try:
-                        cl.photo_upload(image_path, caption)
+                        cl.photo_upload(prepared_path, caption)
                         logger.info(f"Posted after relogin: {content[:50]}...")
                     except Exception as e2:
                         logger.error(f"Failed again after relogin: {e2}")
                 continue
 
+            # Clean up temporary files
             try:
-                os.remove(image_path)
-                logger.info(f"Removed temporary image: {image_path}")
+                os.remove(raw_image_path)
+                logger.info(f"Removed temporary image: {raw_image_path}")
+            except:
+                pass
+                
+            try:
+                os.remove(prepared_path)
+                logger.info(f"Removed temporary image: {prepared_path}")
             except:
                 pass
 
