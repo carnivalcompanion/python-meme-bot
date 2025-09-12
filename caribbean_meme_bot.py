@@ -23,6 +23,31 @@ from dotenv import load_dotenv
 # Flask
 from flask import Flask
 
+
+
+
+if os.path.exists("session.json"):
+    logger.info("🔑 Loading existing Instagram session...")
+    cl.load_settings("session.json")
+    try:
+        cl.get_timeline_feed()  # test if still valid
+        logger.info("✅ Session still valid, no login needed")
+    except Exception:
+        logger.warning("⚠️ Session expired, logging in fresh...")
+        cl.login(USERNAME, PASSWORD)
+        cl.dump_settings("session.json")
+else:
+    logger.info("No saved session.json, logging in fresh...")
+    cl.login(USERNAME, PASSWORD)
+    cl.dump_settings("session.json")
+
+
+
+
+
+
+
+
 # ------------------------------------------------------------------------------
 # Flask keep-alive server
 # ------------------------------------------------------------------------------
@@ -44,7 +69,7 @@ def keep_alive():
 # ------------------------------------------------------------------------------
 # Setup
 # ------------------------------------------------------------------------------
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger("caribbean_meme_bot")
 
 load_dotenv()
@@ -55,13 +80,23 @@ TRIVIA_FILE = "trivia.txt"
 SLANG_FILE = "slang.txt"
 PROFILE_IMG = "placeholder.jpg"
 
-# Font paths - OpenSans Condensed Medium
-FONT_DIR = os.path.join(os.path.dirname(__file__), "fonts")
-FONT_PATH = os.path.join(FONT_DIR, "OpenSans_Condensed-Medium.ttf")
+# ------------------------------------------------------------------------------
+# Helper Functions
+# ------------------------------------------------------------------------------
+def ensure_image_size(image_path, expected_size=(1080, 1350)):
+    """Ensure image is exactly the expected size"""
+    try:
+        img = Image.open(image_path)
+        if img.size != expected_size:
+            logger.warning(f"🔄 Resizing image from {img.size} to {expected_size}")
+            img_resized = img.resize(expected_size, Image.Resampling.LANCZOS)
+            img_resized.save(image_path, "JPEG", quality=95)
+            return True
+        return False
+    except Exception as e:
+        logger.error(f"Error in ensure_image_size: {e}")
+        return False
 
-# ------------------------------------------------------------------------------
-# Helpers
-# ------------------------------------------------------------------------------
 def login_user(client: Client) -> bool:
     """Try session.json first, fallback to fresh login."""
     try:
@@ -92,92 +127,89 @@ def read_content(file_path: str) -> list[str]:
         return []
 
 # ------------------------------------------------------------------------------
-# Image Generator (clean + bold)
+# Image Generator - EXACT Preview Style
 # ------------------------------------------------------------------------------
 def create_dark_text_post(text: str, output_path="post.jpg") -> str:
+    # Canvas size (Instagram 4:5 ratio)
     width, height = 1080, 1350
-    image = Image.new("RGB", (width, height), (21, 32, 43))  # Dark background
+    image = Image.new("RGB", (width, height), (21, 32, 43))  # dark background
     draw = ImageDraw.Draw(image)
 
-    # Improved font handling with multiple fallbacks - OpenSans focused
-    font_size = 72
+    # Fonts - Smaller sizes for better wrapping
     try:
-        # First try: Our preferred OpenSans font
+        # Try Arial fonts first
+        name_font = ImageFont.truetype("Arial Bold.ttf", 48)        # Smaller: 48px instead of 52px
+        handle_font = ImageFont.truetype("Arial.ttf", 36)           # Smaller: 36px instead of 40px
+        text_font = ImageFont.truetype("Arial Bold.ttf", 56)        # Smaller: 56px instead of 64px
+        header_font = ImageFont.truetype("Arial Bold.ttf", 72)      # Smaller: 72px instead of 80px
+    except:
         try:
-            font = ImageFont.truetype(FONT_PATH, font_size)
-            logger.info("Using OpenSans_Condensed-Medium.ttf from project fonts")
-        except IOError:
-            # Second try: System might have OpenSans installed
-            try:
-                font = ImageFont.truetype("OpenSans-CondensedMedium.ttf", font_size)
-                logger.info("Using system OpenSans-CondensedMedium.ttf")
-            except IOError:
-                # Third try: Alternative naming
-                try:
-                    font = ImageFont.truetype("OpenSansCondensed-Medium.ttf", font_size)
-                    logger.info("Using OpenSansCondensed-Medium.ttf")
-                except IOError:
-                    # Fourth try: Common Linux fonts as fallback
-                    try:
-                        font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", font_size)
-                        logger.info("Using DejaVuSans-Bold as fallback")
-                    except IOError:
-                        # Final fallback to default font
-                        logger.warning("Using default font - may affect image quality")
-                        font = ImageFont.load_default()
-                        # Try to set size for default font
-                        try:
-                            font.size = font_size
-                        except:
-                            pass
-    except Exception as e:
-        logger.warning(f"Font loading issues: {e}")
-        font = ImageFont.load_default()
+            # Try alternative font names
+            name_font = ImageFont.truetype("arialbd.ttf", 48)
+            handle_font = ImageFont.truetype("arial.ttf", 36)
+            text_font = ImageFont.truetype("arialbd.ttf", 56)
+            header_font = ImageFont.truetype("arialbd.ttf", 72)
+        except:
+            # Final fallback to default font
+            name_font = handle_font = text_font = header_font = ImageFont.load_default()
 
-    logger.info(f"Font properties: size={getattr(font, 'size', 'unknown')}")
+    # Display name and handle
+    display_name = "Carnival Companion"
+    handle = "@carnivalcompanion · now"
 
-    # Wrap text with appropriate width
-    wrapped = textwrap.wrap(text, width=18)
-    logger.info(f"Text wrapped into {len(wrapped)} lines")
+    # Adjusted positions - profile picture closer to text
+    y = 220  # Moved up slightly
+    x_margin = 80
+    pfp_size = 100
 
-    # Calculate text position to center vertically
-    line_height = 80  # Fixed line height for consistency
-    total_text_height = len(wrapped) * line_height
-    y = (height - total_text_height) // 2
-    
-    logger.info(f"Text positioning: y={y}, total_height={total_text_height}")
-    
-    for line in wrapped:
-        # Calculate text width to center horizontally
-        bbox = draw.textbbox((0, 0), line, font=font)
-        text_width = bbox[2] - bbox[0]
-        x = (width - text_width) // 2
-        draw.text((x, y), line, font=font, fill=(255, 255, 255))
-        y += line_height
-
-    # Profile image handling
+    # 1. "CARNIVAL" HEADER - Large text at top center
+    header_text = "CARNIVAL"
     try:
-        pfp = Image.open(PROFILE_IMG).convert("RGB")
-        # Resize with proper aspect ratio
-        pfp_size = (120, 120)
-        pfp = pfp.resize(pfp_size, Image.Resampling.LANCZOS)
-        
-        # Create circular mask
-        mask = Image.new("L", pfp_size, 0)
-        draw_mask = ImageDraw.Draw(mask)
-        draw_mask.ellipse((0, 0, pfp_size[0], pfp_size[1]), fill=255)
-        
-        # Position profile image
-        image.paste(pfp, (80, 100), mask)
-        logger.info("Profile image added successfully")
-    except Exception as e:
-        logger.warning(f"Profile image not loaded: {e}")
+        bbox = draw.textbbox((0, 0), header_text, font=header_font)
+        header_width = bbox[2] - bbox[0]
+        header_x = (width - header_width) // 2
+        draw.text((header_x, 90), header_text, font=header_font, fill=(255, 255, 255))  # Moved up slightly
+    except:
+        # Manual fallback positioning
+        draw.text((width//2 - 160, 90), header_text, fill=(255, 255, 255))
 
-    image.save(output_path, "JPEG", quality=95)
+    # 2. PROFILE PICTURE - Closer to text body
+    try:
+        if os.path.exists(PROFILE_IMG):
+            pfp = Image.open(PROFILE_IMG).convert("RGB").resize((pfp_size, pfp_size))
+            # Create circular mask
+            mask = Image.new("L", (pfp_size, pfp_size), 0)
+            ImageDraw.Draw(mask).ellipse((0, 0, pfp_size, pfp_size), fill=255)
+            image.paste(pfp, (x_margin, y), mask)
+        else:
+            # Draw blue placeholder circle
+            draw.ellipse((x_margin, y, x_margin+pfp_size, y+pfp_size), fill=(29, 155, 240))
+    except Exception as e:
+        logger.warning(f"Profile image error: {e}")
+        draw.ellipse((x_margin, y, x_margin+pfp_size, y+pfp_size), fill=(29, 155, 240))
+
+    # 3. DISPLAY NAME - Left-aligned
+    draw.text((x_margin+120, y), display_name, font=name_font, fill=(255, 255, 255))
+
+    # 4. HANDLE - Left-aligned in gray
+    draw.text((x_margin+120, y+55), handle, font=handle_font, fill=(136, 153, 166))  # Tighter spacing
+
+    # 5. MAIN TEXT - Left-aligned with wider wrapping (40 characters)
+    wrapped_lines = textwrap.wrap(text, width=40)  # Increased from 30 to 40 characters
+    y_text = y + pfp_size + 20  # Closer to profile section (reduced from 160 to 120)
     
-    # Debug: Check image dimensions
-    img = Image.open(output_path)
-    logger.info(f"Final image size: {img.size}")  # Should be (1080, 1350)
+    for line in wrapped_lines:
+        # STRICTLY LEFT-ALIGNED text at x_margin
+        draw.text((x_margin, y_text), line, font=text_font, fill=(255, 255, 255))
+        # Tighter line spacing
+        y_text += 70  # Reduced from 84 to 70 (smaller font + tighter spacing)
+
+    # Save image
+    image.save(output_path, "JPEG", quality=95)
+    logger.info(f"💾 Image saved to: {output_path}")
+    
+    # Force correct dimensions
+    ensure_image_size(output_path, (width, height))
     
     return output_path
 
@@ -189,32 +221,43 @@ def create_and_post(cl: Client):
         trivia = read_content(TRIVIA_FILE)
         slang = read_content(SLANG_FILE)
         if not trivia and not slang:
-            logger.error("No content in trivia.txt or slang.txt")
+            logger.error("❌ No content in trivia.txt or slang.txt")
             return
 
         content = random.choice(trivia or slang)
-        logger.info(f"Selected content: {content[:50]}...")
-        raw_path = create_dark_text_post(content, f"post_{int(time.time())}.jpg")
-        caption = f"{content}\n\n#CarnivalCompanion #Caribbean"
+        logger.info(f"📄 Selected content: {content}")
+        
+        timestamp = int(time.time())
+        raw_path = f"post_{timestamp}.jpg"
+        
+        raw_path = create_dark_text_post(content, raw_path)
+        caption = f"{content}\n\n#CarnivalCompanion #Caribbean #IslandLife #Trivia"
 
         try:
             cl.photo_upload(raw_path, caption)
-            logger.info(f"✅ Posted: {content[:50]}...")
+            logger.info(f"✅ Posted successfully!")
         except Exception as e:
-            logger.error(f"Upload failed: {e}")
+            logger.error(f"❌ Upload failed: {e}")
             if login_user(cl):
-                cl.photo_upload(raw_path, caption)
+                try:
+                    cl.photo_upload(raw_path, caption)
+                    logger.info(f"✅ Re-upload successful after re-login")
+                except Exception as retry_error:
+                    logger.error(f"❌ Re-upload also failed: {retry_error}")
 
-        os.remove(raw_path)
-        logger.info(f"🗑️ Removed temp: {raw_path}")
+        # Clean up temp file
+        if os.path.exists(raw_path):
+            os.remove(raw_path)
+            logger.info(f"🗑️ Removed temp file")
 
         schedule_next_post(cl)
+        
     except LoginRequired:
-        logger.info("Session expired — re-logging...")
+        logger.info("🔐 Session expired — re-logging...")
         if login_user(cl):
             schedule_next_post(cl)
     except Exception as e:
-        logger.error(f"Error in posting loop: {e}")
+        logger.error(f"❌ Error in posting loop: {e}")
         time.sleep(300)
         schedule_next_post(cl)
 
@@ -222,7 +265,12 @@ def get_random_peak_time() -> datetime:
     now = datetime.now()
     peak_windows = [(9, 11), (17, 19), (20, 22)]
     start, end = random.choice(peak_windows)
-    post_time = now.replace(hour=random.randint(start, end-1), minute=random.randint(0, 59), second=0)
+    post_time = now.replace(
+        hour=random.randint(start, end-1), 
+        minute=random.randint(0, 59), 
+        second=0, 
+        microsecond=0
+    )
     if post_time <= now:
         post_time += timedelta(days=1)
     return post_time
@@ -230,27 +278,43 @@ def get_random_peak_time() -> datetime:
 def schedule_next_post(cl: Client):
     next_time = get_random_peak_time()
     delay = (next_time - datetime.now()).total_seconds()
-    logger.info(f"📅 Next post scheduled: {next_time} (~{delay/3600:.1f}h)")
+    logger.info(f"📅 Next post scheduled: {next_time} (~{delay/3600:.1f} hours)")
     schedule.clear()
     schedule.every(delay).seconds.do(lambda: create_and_post(cl))
 
 # ------------------------------------------------------------------------------
-# Main
+# Main Execution
 # ------------------------------------------------------------------------------
 def main():
+    logger.info("🚀 Starting Caribbean Meme Bot...")
     keep_alive()
+    
+    # Verify environment
+    if not USERNAME or not PASSWORD:
+        logger.error("❌ Missing Instagram credentials in environment variables")
+        return
+    
     cl = Client()
     cl.delay_range = [1, 3]
 
     if not login_user(cl):
+        logger.error("❌ Failed to login to Instagram")
         return
 
-    logger.info("Bot started ✅ First post now...")
+    logger.info("✅ Bot started successfully! First post now...")
     create_and_post(cl)
 
+    # Main loop
     while True:
-        schedule.run_pending()
-        time.sleep(60)
+        try:
+            schedule.run_pending()
+            time.sleep(60)
+        except KeyboardInterrupt:
+            logger.info("⏹️ Bot stopped by user")
+            break
+        except Exception as e:
+            logger.error(f"❌ Error in main loop: {e}")
+            time.sleep(300)
 
 if __name__ == "__main__":
     main()
