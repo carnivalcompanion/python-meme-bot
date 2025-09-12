@@ -119,18 +119,21 @@ def get_peak_hashtags() -> str:
     return " ".join(random.sample(CARIBBEAN_HASHTAGS, 4)) + " #CarnivalCompanion"
 
 
-def prepare_image(path: str, out_path: str) -> str:
-    """Resize image to 1080x1350 for Instagram feed posts."""
-    img = Image.open(path)
-    img = img.convert("RGB")
-
-    # Instagram’s preferred 4:5 portrait ratio
-    target_size = (1080, 1350)
-    img = img.resize(target_size, Image.LANCZOS)
-
-    img.save(out_path, "JPEG", quality=95)
-    logger.info(f"Prepared image saved: {out_path}")
-    return out_path
+def prepare_image(image_path: str, caption_text: str, output_path: str) -> str:
+    """
+    Prepare an image for posting by adding caption/text overlay
+    """
+    try:
+        # Open the image
+        image = Image.open(image_path)
+        
+        # Convert to RGB if necessary (for JPEG compatibility)
+        if image.mode != 'RGB':
+            image = image.convert('RGB')
+        
+        # Resize to Instagram's preferred 4:5 ratio
+        target_size = (1080, 1350)
+        image = image.resize(target_size, Image.LANCZOS)
         
         # Create a drawing context
         draw = ImageDraw.Draw(image)
@@ -308,13 +311,13 @@ def create_and_post(cl: Client):
             else:
                 content, ctype = random.choice(trivia_list), "trivia"
 
-            # Generate raw Twitter-style image
+            # Create Twitter-style image
             timestamp = int(time.time())
             raw_image_path = create_twitter_style_image(content, ctype, f"post_{timestamp}.jpg")
-
-            # ✅ Resize to Instagram 4:5 portrait format
-            prepared_path = prepare_image(raw_image_path, f"prepared_{timestamp}.jpg")
-
+            
+            # Prepare the image with text overlay (this is where the error was)
+            prepared_path = prepare_image(raw_image_path, content, f"prepared_{timestamp}.jpg")
+            
             caption = f"{content}\n\n{get_peak_hashtags()}"
 
             try:
