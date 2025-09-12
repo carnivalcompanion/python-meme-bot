@@ -58,13 +58,10 @@ PASSWORD = os.getenv("IG_PASSWORD")
 # File paths
 TRIVIA_FILE = "trivia.txt"
 SLANG_FILE = "slang.txt"
-PROFILE_IMG = "placeholder.jpg"
 
-# Colors (Twitter dark mode)
-TWITTER_BG = (21, 32, 43)
-TWITTER_TEXT = (255, 255, 255)
-TWITTER_MUTED = (136, 153, 166)
-TWITTER_BLUE = (29, 161, 242)
+# Colors
+BG_COLOR = (21, 32, 43)       # Dark background
+TEXT_COLOR = (255, 255, 255)  # White text
 
 # Hashtags
 CARIBBEAN_HASHTAGS = [
@@ -119,121 +116,41 @@ def get_peak_hashtags() -> str:
     return " ".join(random.sample(CARIBBEAN_HASHTAGS, 4)) + " #CarnivalCompanion"
 
 
-def create_twitter_style_image(text: str, content_type: str, output_path="post.jpg") -> str:
-    """Generate a clean Twitter-style post image (720x720 square with Twitter blue theme)."""
-    width, height = 720, 720  # Square format
-    image = Image.new("RGB", (width, height), TWITTER_BG)
+def create_simple_post(text: str, output_path="post.jpg") -> str:
+    """Generate a clean centered text post for Instagram."""
+    width, height = 1080, 1350  # Portrait size (4:5 ratio)
+    image = Image.new("RGB", (width, height), BG_COLOR)
     draw = ImageDraw.Draw(image)
 
-    # Fonts - scaled for 720x720
+    # Font
     try:
-        name_font = ImageFont.truetype("arialbd.ttf", 40)
-        handle_font = ImageFont.truetype("arial.ttf", 32)
-        text_font = ImageFont.truetype("arial.ttf", 44)
-        small_font = ImageFont.truetype("arial.ttf", 32)
+        font = ImageFont.truetype("arialbd.ttf", 72)
     except:
-        # Fallback to default fonts if custom ones aren't available
-        name_font = ImageFont.load_default()
-        handle_font = ImageFont.load_default()
-        text_font = ImageFont.load_default()
-        small_font = ImageFont.load_default()
+        font = ImageFont.load_default()
 
-    # Profile section at top
-    profile_size = 80
-    profile_x = 50
-    profile_y = 50
+    # Wrap text
+    wrapped = textwrap.wrap(text, width=20)
 
-    # Draw profile picture (circle)
-    try:
-        pfp_path = os.path.join(os.path.dirname(__file__), PROFILE_IMG)
-        pfp = Image.open(pfp_path).convert("RGB").resize((profile_size, profile_size))
-        mask = Image.new("L", (profile_size, profile_size), 0)
-        ImageDraw.Draw(mask).ellipse((0, 0, profile_size, profile_size), fill=255)
-        image.paste(pfp, (profile_x, profile_y), mask)
-    except Exception as e:
-        logger.error(f"⚠️ Could not load profile image: {e}")
-        draw.ellipse([profile_x, profile_y, profile_x + profile_size, profile_y + profile_size], fill=TWITTER_BLUE)
+    # Measure block height
+    line_height = font.size + 20
+    block_height = len(wrapped) * line_height
+    y = (height - block_height) // 2
 
-    # Account name and handle
-    draw.text((profile_x + profile_size + 15, profile_y + 8), "Carnival Companion", fill=TWITTER_TEXT, font=name_font)
-    draw.text((profile_x + profile_size + 15, profile_y + 52), "@CarnivalCompanion · 2h", fill=TWITTER_MUTED, font=handle_font)
+    # Draw centered text
+    for line in wrapped:
+        line_width = draw.textlength(line, font=font)
+        x = (width - line_width) // 2
+        draw.text((x, y), line, font=font, fill=TEXT_COLOR)
+        y += line_height
 
-    # Post content - centered with proper spacing
-    content_x = profile_x
-    content_y = profile_y + profile_size + 40
-    
-    # Wrap text to fit within image width
-    wrapped_lines = textwrap.wrap(text, width=28)
-    
-    # Draw each line of text
-    for line in wrapped_lines:
-        # Center each line of text
-        line_width = text_font.getlength(line)
-        line_x = (width - line_width) // 2
-        draw.text((line_x, content_y), line, font=text_font, fill=TWITTER_TEXT)
-        content_y += text_font.size + 15
-
-    # Engagement section (likes, retweets) - SIMPLIFIED VERSION
-    engagement_y = content_y + 40
-    
-    # Simple text-based engagement (no icons that could cause red dots)
-    likes = random.randint(500, 5000)
-    retweets = random.randint(500, 5000)
-    
-    engagement_text = f"{likes:,} likes    {retweets:,} retweets"
-    engagement_width = small_font.getlength(engagement_text)
-    engagement_x = (width - engagement_width) // 2
-    
-    draw.text((engagement_x, engagement_y), engagement_text, fill=TWITTER_MUTED, font=small_font)
-
-    # Hashtags at the bottom
-    hashtag_y = engagement_y + 50
-    hashtags = get_peak_hashtags()
-    hashtag_width = small_font.getlength(hashtags)
-    hashtag_x = (width - hashtag_width) // 2
-    draw.text((hashtag_x, hashtag_y), hashtags, fill=TWITTER_BLUE, font=small_font)
-
-    image.save(output_path)
-    logger.info(f"Created clean Twitter-style image: {output_path}")
+    image.save(output_path, "JPEG", quality=95)
+    logger.info(f"Created simple centered image: {output_path}")
     return output_path
 
-def prepare_image(path: str, out_path: str) -> str:
-    """Crop + resize image to 720x720 for Instagram feed posts."""
-    img = Image.open(path).convert("RGB")
-
-    target_w, target_h = 720, 720  # Square format
-
-    # Current aspect ratio
-    w, h = img.size
-    current_ratio = w / h
-
-    if current_ratio > 1:
-        # Image too wide → crop width
-        new_w = h
-        left = (w - new_w) // 2
-        right = left + new_w
-        img = img.crop((left, 0, right, h))
-    else:
-        # Image too tall → crop height
-        new_h = w
-        top = (h - new_h) // 2
-        bottom = top + new_h
-        img = img.crop((0, top, w, bottom))
-
-    # Final resize to 720x720
-    img = img.resize((target_w, target_h), Image.LANCZOS)
-    img.save(out_path, "JPEG", quality=95)
-    return out_path
-
-
-# ------------------------------------------------------------------------------
-# Posting Logic
-# ------------------------------------------------------------------------------
 
 def get_random_peak_time() -> datetime:
-    """Return a random peak posting time for the next day if needed."""
     now = datetime.now()
-    peak_windows = [(9, 11), (17, 19), (20, 22)]  # morning, evening, late
+    peak_windows = [(9, 11), (17, 19), (20, 22)]
     start, end = random.choice(peak_windows)
     hour = random.randint(start, end - 1)
     minute = random.randint(0, 59)
@@ -242,6 +159,9 @@ def get_random_peak_time() -> datetime:
         post_time += timedelta(days=1)
     return post_time
 
+# ------------------------------------------------------------------------------
+# Posting Logic
+# ------------------------------------------------------------------------------
 
 def create_and_post(cl: Client):
     try:
@@ -262,11 +182,9 @@ def create_and_post(cl: Client):
             else:
                 content, ctype = random.choice(trivia_list), "trivia"
 
-            # Create the Twitter-style image
-            image_path = create_twitter_style_image(content, ctype, f"post_{int(time.time())}.jpg")
-            
-            # For Instagram, we'll use just hashtags in the caption
-            caption = get_peak_hashtags()
+            timestamp = int(time.time())
+            image_path = create_simple_post(content, f"post_{timestamp}.jpg")
+            caption = f"{content}\n\n{get_peak_hashtags()}"
 
             try:
                 cl.photo_upload(image_path, caption)
