@@ -58,9 +58,9 @@ PASSWORD = os.getenv("IG_PASSWORD")
 # File paths
 TRIVIA_FILE = "trivia.txt"
 SLANG_FILE = "slang.txt"
-PROFILE_IMG = "placeholder.jpg"  # must exist in repo
+PROFILE_IMG = "placeholder.jpg"
 
-# Colors (Twitter dark mode)
+# Colors (Twitter/X style dark mode)
 TWITTER_BG = (21, 32, 43)
 TWITTER_TEXT = (255, 255, 255)
 TWITTER_MUTED = (136, 153, 166)
@@ -120,43 +120,43 @@ def get_peak_hashtags() -> str:
 
 
 def create_twitter_style_post(text: str, output_path="post.jpg") -> str:
-    """Generate a Twitter-style post (dark, left-aligned, big text)."""
+    """Generate a clean X/Twitter-style post with profile image, left-aligned text."""
     width, height = 1080, 1350  # Instagram 4:5 portrait
     image = Image.new("RGB", (width, height), TWITTER_BG)
     draw = ImageDraw.Draw(image)
 
     # Fonts
     try:
-        name_font = ImageFont.truetype("arialbd.ttf", 50)
-        handle_font = ImageFont.truetype("arial.ttf", 40)
-        text_font = ImageFont.truetype("arial.ttf", 95)  # BIG text
+        name_font = ImageFont.truetype("arialbd.ttf", 48)
+        handle_font = ImageFont.truetype("arial.ttf", 36)
+        text_font = ImageFont.truetype("arial.ttf", 64)  # large readable text
     except:
         name_font = handle_font = text_font = ImageFont.load_default()
 
     # Profile circle
-    profile_size = 120
+    profile_size = 110
     try:
         pfp = Image.open(PROFILE_IMG).convert("RGB").resize((profile_size, profile_size))
         mask = Image.new("L", (profile_size, profile_size), 0)
         ImageDraw.Draw(mask).ellipse((0, 0, profile_size, profile_size), fill=255)
-        image.paste(pfp, (80, 80), mask)
+        image.paste(pfp, (70, 70), mask)
     except:
-        draw.ellipse([80, 80, 80+profile_size, 80+profile_size], fill=TWITTER_BLUE)
+        draw.ellipse([70, 70, 70+profile_size, 70+profile_size], fill=TWITTER_BLUE)
 
     # Name + handle
-    draw.text((230, 90), "Carnival Companion", fill=TWITTER_TEXT, font=name_font)
-    draw.text((230, 150), "@CarnivalCompanion", fill=TWITTER_MUTED, font=handle_font)
+    draw.text((200, 80), "Carnival Companion", fill=TWITTER_TEXT, font=name_font)
+    draw.text((200, 140), "@CarnivalCompanion", fill=TWITTER_MUTED, font=handle_font)
 
-    # Post text (left aligned)
-    wrapped_lines = textwrap.wrap(text, width=35)  # keeps wrapping neat
+    # Post text (left aligned, slightly lower in the frame)
+    wrapped_lines = textwrap.wrap(text, width=28)
     y_text = 300
     for line in wrapped_lines:
-        draw.text((80, y_text), line, font=text_font, fill=TWITTER_TEXT)
-        y_text += text_font.size + 20
+        draw.text((70, y_text), line, font=text_font, fill=TWITTER_TEXT)
+        y_text += text_font.size + 25
 
     # Save
     image.save(output_path, "JPEG", quality=95)
-    logger.info(f"Created post: {output_path}")
+    logger.info(f"✅ Created post: {output_path}")
     return output_path
 
 
@@ -170,6 +170,16 @@ def get_random_peak_time() -> datetime:
     if post_time <= now:
         post_time += timedelta(days=1)
     return post_time
+
+
+def prepare_image(path: str, out_path: str) -> str:
+    """Resize image to 1080x1350 for Instagram feed posts."""
+    img = Image.open(path)
+    img = img.convert("RGB")
+    target_size = (1080, 1350)  # Instagram 4:5 ratio
+    img = img.resize(target_size, Image.LANCZOS)
+    img.save(out_path, "JPEG", quality=95)
+    return out_path
 
 # ------------------------------------------------------------------------------
 # Posting Logic
@@ -188,23 +198,24 @@ def create_and_post(cl: Client):
 
         for i in range(post_count):
             if random.choice([True, False]) and trivia_list:
-                content = random.choice(trivia_list)
+                content, ctype = random.choice(trivia_list), "trivia"
             elif slang_list:
-                content = random.choice(slang_list)
+                content, ctype = random.choice(slang_list), "slang"
             else:
-                content = random.choice(trivia_list)
+                content, ctype = random.choice(trivia_list), "trivia"
 
             raw_image_path = create_twitter_style_post(content, f"post_{int(time.time())}.jpg")
+            prepared_path = prepare_image(raw_image_path, f"prepared_{int(time.time())}.jpg")
             caption = f"{content}\n\n{get_peak_hashtags()}"
 
             try:
-                cl.photo_upload(raw_image_path, caption)
+                cl.photo_upload(prepared_path, caption)
                 logger.info(f"Posted: {content[:50]}...")
             except Exception as e:
                 logger.error(f"Failed to upload: {e}")
                 if login_user(cl):
                     try:
-                        cl.photo_upload(raw_image_path, caption)
+                        cl.photo_upload(prepared_path, caption)
                         logger.info(f"Posted after relogin: {content[:50]}...")
                     except Exception as e2:
                         logger.error(f"Failed again after relogin: {e2}")
@@ -212,6 +223,8 @@ def create_and_post(cl: Client):
 
             try:
                 os.remove(raw_image_path)
+                os.remove(prepared_path)
+                logger.info(f"Removed temporary images: {raw_image_path}, {prepared_path}")
             except:
                 pass
 
