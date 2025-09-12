@@ -120,145 +120,108 @@ def get_peak_hashtags() -> str:
 
 
 def create_twitter_style_image(text: str, content_type: str, output_path="post.jpg") -> str:
-    """Generate a Twitter-style post image."""
-    width, height = 1080, 1080
+    """Generate a Twitter-style post image (1080x1350 portrait, vertically centered)."""
+    width, height = 1080, 1350
     image = Image.new("RGB", (width, height), TWITTER_BG)
     draw = ImageDraw.Draw(image)
 
-    # Fonts
+    # Fonts (scaled up)
     try:
-        name_font = ImageFont.truetype("Arial Bold", 36)
-        handle_font = ImageFont.truetype("Arial", 28)
-        text_font = ImageFont.truetype("Arial", 34)
-        small_font = ImageFont.truetype("Arial", 26)
+        name_font = ImageFont.truetype("arialbd.ttf", 42)
+        handle_font = ImageFont.truetype("arial.ttf", 34)
+        text_font = ImageFont.truetype("arial.ttf", 40)
+        small_font = ImageFont.truetype("arial.ttf", 32)
     except:
-        try:
-            name_font = ImageFont.truetype("arialbd.ttf", 36)
-            handle_font = ImageFont.truetype("arial.ttf", 28)
-            text_font = ImageFont.truetype("arial.ttf", 34)
-            small_font = ImageFont.truetype("arial.ttf", 26)
-        except:
-            name_font = handle_font = text_font = small_font = ImageFont.load_default()
+        name_font = handle_font = text_font = small_font = ImageFont.load_default()
 
     # Wrap text
-    wrapped_lines = textwrap.wrap(text, width=45)
+    wrapped_lines = textwrap.wrap(text, width=50)
 
-    # Measure widths
-    text_widths = [draw.textlength(line, font=text_font) for line in wrapped_lines]
-    max_text_width = max(text_widths) if text_widths else 0
-    name_w = draw.textlength("Carnival Companion", font=name_font)
-    handle_w = draw.textlength("@CarnivalCompanion · 2h", font=handle_font)
-    header_width = max(name_w, handle_w) + 120
+    # Measure text height
+    text_height = sum(text_font.size + 14 for _ in wrapped_lines)
 
-    likes_text = f"{random.randint(500,5000):,}"
-    rts_text = f"{random.randint(500,5000):,}"
-    likes_w = draw.textlength(likes_text, font=small_font) + 120
-    rts_w = draw.textlength(rts_text, font=small_font) + 300
-    engagement_width = max(likes_w, rts_w)
+    # Fixed block sizes
+    profile_h = 120 + 40   # profile pic + spacing
+    engagement_h = 100     # likes/retweets block
+    hashtags_h = 80        # hashtags at bottom
 
-    block_width = max(max_text_width, header_width, engagement_width)
-    offset_x = int((width - block_width) // 2)
+    block_height = profile_h + text_height + engagement_h + hashtags_h
+
+    # Top margin so the block is vertically centered
+    top_y = (height - block_height) // 2
+
+    offset_x = 80  # left padding
 
     # Profile image
     try:
         pfp_path = os.path.join(os.path.dirname(__file__), PROFILE_IMG)
-        pfp = Image.open(pfp_path).convert("RGB").resize((100, 100))
-        mask = Image.new("L", (100, 100), 0)
-        ImageDraw.Draw(mask).ellipse((0, 0, 100, 100), fill=255)
-        image.paste(pfp, (offset_x, 140), mask)
+        pfp = Image.open(pfp_path).convert("RGB").resize((120, 120))
+        mask = Image.new("L", (120, 120), 0)
+        ImageDraw.Draw(mask).ellipse((0, 0, 120, 120), fill=255)
+        image.paste(pfp, (offset_x, top_y), mask)
     except Exception as e:
         logger.error(f"⚠️ Could not load profile image: {e}")
-        draw.ellipse([offset_x, 140, offset_x + 100, 240], fill=TWITTER_BLUE)
+        draw.ellipse([offset_x, top_y, offset_x + 120, top_y + 120], fill=TWITTER_BLUE)
 
     # Name + handle
-    draw.text((offset_x + 120, 145), "Carnival Companion", fill=TWITTER_TEXT, font=name_font)
-    draw.text((offset_x + 120, 185), "@CarnivalCompanion · 2h", fill=TWITTER_MUTED, font=handle_font)
+    draw.text((offset_x + 140, top_y + 10), "Carnival Companion", fill=TWITTER_TEXT, font=name_font)
+    draw.text((offset_x + 140, top_y + 60), "@CarnivalCompanion · 2h", fill=TWITTER_MUTED, font=handle_font)
 
     # Post text
-    y_text = 280
+    y_text = top_y + 160
     for line in wrapped_lines:
         draw.text((offset_x, y_text), line, font=text_font, fill=TWITTER_TEXT)
-        y_text += text_font.size + 10
+        y_text += text_font.size + 14
 
-    # Engagement
-    y = 850
+    # Engagement (likes/retweets)
+    y = y_text + 40
     likes = random.randint(500, 5000)
     retweets = random.randint(500, 5000)
 
-    heart_x, heart_y = offset_x + 50, y
+    # Heart
+    heart_x, heart_y = offset_x + 60, y
     draw.polygon(
         [
-            (heart_x, heart_y + 20),
-            (heart_x + 15, heart_y),
-            (heart_x + 30, heart_y + 20),
-            (heart_x + 15, heart_y + 40),
+            (heart_x, heart_y + 24),
+            (heart_x + 18, heart_y),
+            (heart_x + 36, heart_y + 24),
+            (heart_x + 18, heart_y + 48),
         ],
         fill=TWITTER_MUTED,
     )
-    draw.text((heart_x + 60, y), f"{likes:,}", fill=TWITTER_MUTED, font=small_font)
+    draw.text((heart_x + 70, y), f"{likes:,}", fill=TWITTER_MUTED, font=small_font)
 
-    rt_x, rt_y = offset_x + 300, y + 10
-    draw.line([(rt_x, rt_y), (rt_x + 35, rt_y)], fill=TWITTER_MUTED, width=3)
-    draw.polygon([(rt_x + 35, rt_y), (rt_x + 30, rt_y - 5), (rt_x + 30, rt_y + 5)], fill=TWITTER_MUTED)
-    draw.line([(rt_x, rt_y + 20), (rt_x + 35, rt_y + 20)], fill=TWITTER_MUTED, width=3)
-    draw.polygon([(rt_x, rt_y + 20), (rt_x + 5, rt_y + 15), (rt_x + 5, rt_y + 25)], fill=TWITTER_MUTED)
-    draw.text((rt_x + 60, y), f"{retweets:,}", fill=TWITTER_MUTED, font=small_font)
+    # Retweet
+    rt_x, rt_y = offset_x + 360, y + 10
+    draw.line([(rt_x, rt_y), (rt_x + 45, rt_y)], fill=TWITTER_MUTED, width=4)
+    draw.polygon([(rt_x + 45, rt_y), (rt_x + 40, rt_y - 6), (rt_x + 40, rt_y + 6)], fill=TWITTER_MUTED)
+    draw.line([(rt_x, rt_y + 28), (rt_x + 45, rt_y + 28)], fill=TWITTER_MUTED, width=4)
+    draw.polygon([(rt_x, rt_y + 28), (rt_x + 6, rt_y + 22), (rt_x + 6, rt_y + 34)], fill=TWITTER_MUTED)
+    draw.text((rt_x + 70, y), f"{retweets:,}", fill=TWITTER_MUTED, font=small_font)
 
-    # Hashtags
-    draw.text((offset_x, height - 80), get_peak_hashtags(), fill=TWITTER_BLUE, font=small_font)
+    # Hashtags at bottom of block
+    draw.text((offset_x, y + 80), get_peak_hashtags(), fill=TWITTER_BLUE, font=small_font)
 
     image.save(output_path)
-    logger.info(f"Created image: {output_path}")
+    logger.info(f"Created centered portrait image: {output_path}")
     return output_path
 
-
-def prepare_image(image_path: str, caption_text: str, output_path: str) -> str:
-    """
-    Prepare an image for Instagram: resize 4:5 and add caption overlay.
-    """
-    try:
-        image = Image.open(image_path)
-        if image.mode != "RGB":
-            image = image.convert("RGB")
-
-        # Resize to Instagram 4:5 (portrait)
-        target_size = (1080, 1350)
-        image = image.resize(target_size, Image.LANCZOS)
-
-        draw = ImageDraw.Draw(image)
-        try:
-            font = ImageFont.truetype("arial.ttf", 36)
-        except:
-            try:
-                font = ImageFont.truetype("arialbd.ttf", 36)
-            except:
-                font = ImageFont.load_default()
-
-        # Wrap caption text
-        wrapped_lines = textwrap.wrap(caption_text, width=30)
-        line_height = font.size + 10
-        total_text_height = len(wrapped_lines) * line_height
-        text_y = image.height - total_text_height - 50
-
-        for line in wrapped_lines:
-            # outline
-            for x_offset in [-2, -1, 1, 2]:
-                for y_offset in [-2, -1, 1, 2]:
-                    draw.text((50 + x_offset, text_y + y_offset), line, font=font, fill="black")
-            draw.text((50, text_y), line, font=font, fill="white")
-            text_y += line_height
-
-        image.save(output_path, "JPEG", quality=95)
-        logger.info(f"Prepared image saved: {output_path}")
-        return output_path
-
-    except Exception as e:
-        logger.error(f"Error preparing image: {e}")
-        return image_path
 
 # ------------------------------------------------------------------------------
 # Posting Logic
 # ------------------------------------------------------------------------------
+
+def get_random_peak_time() -> datetime:
+    now = datetime.now()
+    peak_windows = [(9, 11), (17, 19), (20, 22)]
+    start, end = random.choice(peak_windows)
+    hour = random.randint(start, end - 1)
+    minute = random.randint(0, 59)
+    post_time = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+    if post_time <= now:
+        post_time += timedelta(days=1)
+    return post_time
+
 
 def create_and_post(cl: Client):
     try:
@@ -279,28 +242,25 @@ def create_and_post(cl: Client):
             else:
                 content, ctype = random.choice(trivia_list), "trivia"
 
-            timestamp = int(time.time())
-            raw_image_path = create_twitter_style_image(content, ctype, f"post_{timestamp}.jpg")
-            prepared_path = prepare_image(raw_image_path, content, f"prepared_{timestamp}.jpg")
+            image_path = create_twitter_style_image(content, ctype, f"post_{int(time.time())}.jpg")
             caption = f"{content}\n\n{get_peak_hashtags()}"
 
             try:
-                cl.photo_upload(prepared_path, caption)
+                cl.photo_upload(image_path, caption)
                 logger.info(f"Posted: {content[:50]}...")
             except Exception as e:
                 logger.error(f"Failed to upload: {e}")
                 if login_user(cl):
                     try:
-                        cl.photo_upload(prepared_path, caption)
+                        cl.photo_upload(image_path, caption)
                         logger.info(f"Posted after relogin: {content[:50]}...")
                     except Exception as e2:
                         logger.error(f"Failed again after relogin: {e2}")
                 continue
 
             try:
-                os.remove(raw_image_path)
-                os.remove(prepared_path)
-                logger.info(f"Removed temporary images: {raw_image_path}, {prepared_path}")
+                os.remove(image_path)
+                logger.info(f"Removed temporary image: {image_path}")
             except:
                 pass
 
@@ -362,3 +322,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
