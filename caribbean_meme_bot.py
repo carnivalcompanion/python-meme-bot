@@ -58,10 +58,13 @@ PASSWORD = os.getenv("IG_PASSWORD")
 # File paths
 TRIVIA_FILE = "trivia.txt"
 SLANG_FILE = "slang.txt"
+PROFILE_IMG = "placeholder.jpg"  # must exist in repo
 
-# Colors
-BG_COLOR = (21, 32, 43)       # Dark background
-TEXT_COLOR = (255, 255, 255)  # White text
+# Colors (Twitter dark mode)
+TWITTER_BG = (21, 32, 43)
+TWITTER_TEXT = (255, 255, 255)
+TWITTER_MUTED = (136, 153, 166)
+TWITTER_BLUE = (29, 161, 242)
 
 # Hashtags
 CARIBBEAN_HASHTAGS = [
@@ -116,35 +119,44 @@ def get_peak_hashtags() -> str:
     return " ".join(random.sample(CARIBBEAN_HASHTAGS, 4)) + " #CarnivalCompanion"
 
 
-def create_simple_post(text: str, output_path="post.jpg") -> str:
-    """Generate a clean centered text post for Instagram."""
-    width, height = 1080, 1350  # Portrait size (4:5 ratio)
-    image = Image.new("RGB", (width, height), BG_COLOR)
+def create_twitter_style_post(text: str, output_path="post.jpg") -> str:
+    """Generate a Twitter-style post (dark, left-aligned, big text)."""
+    width, height = 1080, 1350  # Instagram 4:5 portrait
+    image = Image.new("RGB", (width, height), TWITTER_BG)
     draw = ImageDraw.Draw(image)
 
-    # Font
+    # Fonts
     try:
-        font = ImageFont.truetype("arialbd.ttf", 72)
+        name_font = ImageFont.truetype("arialbd.ttf", 50)
+        handle_font = ImageFont.truetype("arial.ttf", 40)
+        text_font = ImageFont.truetype("arial.ttf", 95)  # BIG text
     except:
-        font = ImageFont.load_default()
+        name_font = handle_font = text_font = ImageFont.load_default()
 
-    # Wrap text
-    wrapped = textwrap.wrap(text, width=20)
+    # Profile circle
+    profile_size = 120
+    try:
+        pfp = Image.open(PROFILE_IMG).convert("RGB").resize((profile_size, profile_size))
+        mask = Image.new("L", (profile_size, profile_size), 0)
+        ImageDraw.Draw(mask).ellipse((0, 0, profile_size, profile_size), fill=255)
+        image.paste(pfp, (80, 80), mask)
+    except:
+        draw.ellipse([80, 80, 80+profile_size, 80+profile_size], fill=TWITTER_BLUE)
 
-    # Measure block height
-    line_height = font.size + 20
-    block_height = len(wrapped) * line_height
-    y = (height - block_height) // 2
+    # Name + handle
+    draw.text((230, 90), "Carnival Companion", fill=TWITTER_TEXT, font=name_font)
+    draw.text((230, 150), "@CarnivalCompanion", fill=TWITTER_MUTED, font=handle_font)
 
-    # Draw centered text
-    for line in wrapped:
-        line_width = draw.textlength(line, font=font)
-        x = (width - line_width) // 2
-        draw.text((x, y), line, font=font, fill=TEXT_COLOR)
-        y += line_height
+    # Post text (left aligned)
+    wrapped_lines = textwrap.wrap(text, width=35)  # keeps wrapping neat
+    y_text = 300
+    for line in wrapped_lines:
+        draw.text((80, y_text), line, font=text_font, fill=TWITTER_TEXT)
+        y_text += text_font.size + 20
 
+    # Save
     image.save(output_path, "JPEG", quality=95)
-    logger.info(f"Created simple centered image: {output_path}")
+    logger.info(f"Created post: {output_path}")
     return output_path
 
 
@@ -176,32 +188,30 @@ def create_and_post(cl: Client):
 
         for i in range(post_count):
             if random.choice([True, False]) and trivia_list:
-                content, ctype = random.choice(trivia_list), "trivia"
+                content = random.choice(trivia_list)
             elif slang_list:
-                content, ctype = random.choice(slang_list), "slang"
+                content = random.choice(slang_list)
             else:
-                content, ctype = random.choice(trivia_list), "trivia"
+                content = random.choice(trivia_list)
 
-            timestamp = int(time.time())
-            image_path = create_simple_post(content, f"post_{timestamp}.jpg")
+            raw_image_path = create_twitter_style_post(content, f"post_{int(time.time())}.jpg")
             caption = f"{content}\n\n{get_peak_hashtags()}"
 
             try:
-                cl.photo_upload(image_path, caption)
+                cl.photo_upload(raw_image_path, caption)
                 logger.info(f"Posted: {content[:50]}...")
             except Exception as e:
                 logger.error(f"Failed to upload: {e}")
                 if login_user(cl):
                     try:
-                        cl.photo_upload(image_path, caption)
+                        cl.photo_upload(raw_image_path, caption)
                         logger.info(f"Posted after relogin: {content[:50]}...")
                     except Exception as e2:
                         logger.error(f"Failed again after relogin: {e2}")
                 continue
 
             try:
-                os.remove(image_path)
-                logger.info(f"Removed temporary image: {image_path}")
+                os.remove(raw_image_path)
             except:
                 pass
 
