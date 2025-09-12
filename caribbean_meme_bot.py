@@ -60,11 +60,10 @@ TRIVIA_FILE = "trivia.txt"
 SLANG_FILE = "slang.txt"
 PROFILE_IMG = "placeholder.jpg"
 
-# Colors (Twitter/X style dark mode)
-TWITTER_BG = (21, 32, 43)
-TWITTER_TEXT = (255, 255, 255)
-TWITTER_MUTED = (136, 153, 166)
-TWITTER_BLUE = (29, 161, 242)
+# Colors
+DARK_BG = (21, 32, 43)
+WHITE = (255, 255, 255)
+MUTED = (136, 153, 166)
 
 # Hashtags
 CARIBBEAN_HASHTAGS = [
@@ -119,44 +118,44 @@ def get_peak_hashtags() -> str:
     return " ".join(random.sample(CARIBBEAN_HASHTAGS, 4)) + " #CarnivalCompanion"
 
 
-def create_twitter_style_post(text: str, output_path="post.jpg") -> str:
-    """Generate a clean X/Twitter-style post with profile image, left-aligned text."""
-    width, height = 1080, 1350  # Instagram 4:5 portrait
-    image = Image.new("RGB", (width, height), TWITTER_BG)
+def create_instagram_style_post(text: str, output_path="post.jpg") -> str:
+    """Generate a clean Instagram-style post with dark background, large left-aligned text, and profile image."""
+    width, height = 1080, 1350
+    image = Image.new("RGB", (width, height), DARK_BG)
     draw = ImageDraw.Draw(image)
 
     # Fonts
     try:
-        name_font = ImageFont.truetype("arialbd.ttf", 48)
-        handle_font = ImageFont.truetype("arial.ttf", 36)
-        text_font = ImageFont.truetype("arial.ttf", 64)  # large readable text
+        font = ImageFont.truetype("arial.ttf", 72)   # big readable font
+        name_font = ImageFont.truetype("arialbd.ttf", 42)
+        handle_font = ImageFont.truetype("arial.ttf", 32)
     except:
-        name_font = handle_font = text_font = ImageFont.load_default()
+        font = ImageFont.load_default()
+        name_font = handle_font = font
 
-    # Profile circle
-    profile_size = 110
+    # Profile image
     try:
-        pfp = Image.open(PROFILE_IMG).convert("RGB").resize((profile_size, profile_size))
-        mask = Image.new("L", (profile_size, profile_size), 0)
-        ImageDraw.Draw(mask).ellipse((0, 0, profile_size, profile_size), fill=255)
-        image.paste(pfp, (70, 70), mask)
-    except:
-        draw.ellipse([70, 70, 70+profile_size, 70+profile_size], fill=TWITTER_BLUE)
+        pfp = Image.open(PROFILE_IMG).convert("RGB").resize((100, 100))
+        mask = Image.new("L", (100, 100), 0)
+        ImageDraw.Draw(mask).ellipse((0, 0, 100, 100), fill=255)
+        image.paste(pfp, (50, 80), mask)
+    except Exception as e:
+        logger.warning(f"⚠️ Could not load profile image: {e}")
+        draw.ellipse([50, 80, 150, 180], fill=(29, 161, 242))
 
     # Name + handle
-    draw.text((200, 80), "Carnival Companion", fill=TWITTER_TEXT, font=name_font)
-    draw.text((200, 140), "@CarnivalCompanion", fill=TWITTER_MUTED, font=handle_font)
+    draw.text((170, 90), "Carnival Companion", font=name_font, fill=WHITE)
+    draw.text((170, 135), "@CarnivalCompanion", font=handle_font, fill=MUTED)
 
-    # Post text (left aligned, slightly lower in the frame)
-    wrapped_lines = textwrap.wrap(text, width=28)
-    y_text = 300
+    # Main content
+    wrapped_lines = textwrap.wrap(text, width=18)
+    y_text = 280
     for line in wrapped_lines:
-        draw.text((70, y_text), line, font=text_font, fill=TWITTER_TEXT)
-        y_text += text_font.size + 25
+        draw.text((60, y_text), line, font=font, fill=WHITE)
+        y_text += font.size + 25
 
-    # Save
     image.save(output_path, "JPEG", quality=95)
-    logger.info(f"✅ Created post: {output_path}")
+    logger.info(f"✅ Created Instagram-style image: {output_path}")
     return output_path
 
 
@@ -170,16 +169,6 @@ def get_random_peak_time() -> datetime:
     if post_time <= now:
         post_time += timedelta(days=1)
     return post_time
-
-
-def prepare_image(path: str, out_path: str) -> str:
-    """Resize image to 1080x1350 for Instagram feed posts."""
-    img = Image.open(path)
-    img = img.convert("RGB")
-    target_size = (1080, 1350)  # Instagram 4:5 ratio
-    img = img.resize(target_size, Image.LANCZOS)
-    img.save(out_path, "JPEG", quality=95)
-    return out_path
 
 # ------------------------------------------------------------------------------
 # Posting Logic
@@ -198,24 +187,23 @@ def create_and_post(cl: Client):
 
         for i in range(post_count):
             if random.choice([True, False]) and trivia_list:
-                content, ctype = random.choice(trivia_list), "trivia"
+                content = random.choice(trivia_list)
             elif slang_list:
-                content, ctype = random.choice(slang_list), "slang"
+                content = random.choice(slang_list)
             else:
-                content, ctype = random.choice(trivia_list), "trivia"
+                content = random.choice(trivia_list)
 
-            raw_image_path = create_twitter_style_post(content, f"post_{int(time.time())}.jpg")
-            prepared_path = prepare_image(raw_image_path, f"prepared_{int(time.time())}.jpg")
+            raw_image_path = create_instagram_style_post(content, f"post_{int(time.time())}.jpg")
             caption = f"{content}\n\n{get_peak_hashtags()}"
 
             try:
-                cl.photo_upload(prepared_path, caption)
+                cl.photo_upload(raw_image_path, caption)
                 logger.info(f"Posted: {content[:50]}...")
             except Exception as e:
                 logger.error(f"Failed to upload: {e}")
                 if login_user(cl):
                     try:
-                        cl.photo_upload(prepared_path, caption)
+                        cl.photo_upload(raw_image_path, caption)
                         logger.info(f"Posted after relogin: {content[:50]}...")
                     except Exception as e2:
                         logger.error(f"Failed again after relogin: {e2}")
@@ -223,8 +211,7 @@ def create_and_post(cl: Client):
 
             try:
                 os.remove(raw_image_path)
-                os.remove(prepared_path)
-                logger.info(f"Removed temporary images: {raw_image_path}, {prepared_path}")
+                logger.info(f"Removed temporary image: {raw_image_path}")
             except:
                 pass
 
@@ -258,7 +245,7 @@ def schedule_next_post(cl: Client):
 # ------------------------------------------------------------------------------
 
 def main():
-    keep_alive()  # Start the keep-alive server
+    keep_alive()
 
     cl = Client()
     cl.delay_range = [1, 3]
