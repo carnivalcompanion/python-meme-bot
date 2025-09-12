@@ -1,7 +1,6 @@
 # ------------------------------------------------------------------------------
 # Imports
 # ------------------------------------------------------------------------------
-
 import os
 import random
 import time
@@ -11,32 +10,31 @@ import textwrap
 from datetime import datetime, timedelta
 from threading import Thread
 
-# Pillow (image generation)
+# Pillow
 from PIL import Image, ImageDraw, ImageFont
 
 # Instagram client
 from instagrapi import Client
 from instagrapi.exceptions import LoginRequired
 
-# Environment variables
+# Env
 from dotenv import load_dotenv
 
-# Flask for keep-alive server
+# Flask
 from flask import Flask
 
 # ------------------------------------------------------------------------------
 # Flask keep-alive server
 # ------------------------------------------------------------------------------
-
 app = Flask(__name__)
 
-@app.route('/')
+@app.route("/")
 def home():
-    return "Python Bot is alive!"
+    return "Python Meme Bot is alive!"
 
 def run_flask():
-    port = int(os.environ.get('PORT', 10000))
-    app.run(host='0.0.0.0', port=port)
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)
 
 def keep_alive():
     t = Thread(target=run_flask)
@@ -46,230 +44,213 @@ def keep_alive():
 # ------------------------------------------------------------------------------
 # Setup
 # ------------------------------------------------------------------------------
-
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("caribbean_meme_bot")
 
-# Load environment variables
 load_dotenv()
 USERNAME = os.getenv("IG_USERNAME")
 PASSWORD = os.getenv("IG_PASSWORD")
 
-# File paths
 TRIVIA_FILE = "trivia.txt"
 SLANG_FILE = "slang.txt"
 PROFILE_IMG = "placeholder.jpg"
 
-# Colors
-DARK_BG = (21, 32, 43)
-WHITE = (255, 255, 255)
-MUTED = (136, 153, 166)
-
-# Hashtags
-CARIBBEAN_HASHTAGS = [
-    "#Caribbean", "#WestIndian", "#IslandLife", "#TropicalVibes",
-    "#CaribbeanCulture", "#Soca", "#Reggae", "#Dancehall",
-    "#CaribbeanFood", "#Carnival", "#Steelpan", "#CaribbeanMusic",
-    "#TrinidadCarnival", "#Jamaica", "#Barbados", "#Tobago",
-    "#CaribbeanTravel", "#CaribbeanStyle", "#CaribbeanLife",
-    "#CaribbeanVibes", "#WestIndies", "#IslandTime", "#CaribbeanDream"
-]
+# Font paths - OpenSans Condensed Medium
+FONT_DIR = os.path.join(os.path.dirname(__file__), "fonts")
+FONT_PATH = os.path.join(FONT_DIR, "OpenSans_Condensed-Medium.ttf")
 
 # ------------------------------------------------------------------------------
 # Helpers
 # ------------------------------------------------------------------------------
-
 def login_user(client: Client) -> bool:
-    """Log into Instagram."""
+    """Try session.json first, fallback to fresh login."""
     try:
-        try:
+        if os.path.exists("session.json"):
             client.load_settings("session.json")
             client.login(USERNAME, PASSWORD)
-            logger.info("Logged in using saved session")
-        except FileNotFoundError:
-            logger.info("No saved session found, logging in fresh")
+            logger.info("Logged in using saved session.json ✅")
+        else:
+            logger.info("No saved session.json, logging in fresh...")
             client.login(USERNAME, PASSWORD)
             client.dump_settings("session.json")
+            logger.info("New session.json saved ✅")
 
         if client.user_id:
-            logger.info("Logged in successfully")
+            logger.info("Instagram login success 🎉")
             return True
         return False
     except Exception as e:
-        logger.error(f"Login failed: {e}")
+        logger.error(f"Login failed ❌: {e}")
         return False
 
-
 def read_content(file_path: str) -> list[str]:
-    """Read lines from a file, stripping blanks."""
     try:
         with open(file_path, "r", encoding="utf-8") as f:
             return [line.strip() for line in f if line.strip()]
-    except FileNotFoundError:
-        logger.error(f"File {file_path} not found.")
-        return []
     except Exception as e:
         logger.error(f"Error reading {file_path}: {e}")
         return []
 
-
-def get_peak_hashtags() -> str:
-    """Get 4 random hashtags plus #CarnivalCompanion."""
-    return " ".join(random.sample(CARIBBEAN_HASHTAGS, 4)) + " #CarnivalCompanion"
-
-
-def create_instagram_style_post(text: str, output_path="post.jpg") -> str:
-    """Generate a clean Instagram-style post with dark background, large left-aligned text, and profile image."""
+# ------------------------------------------------------------------------------
+# Image Generator (clean + bold)
+# ------------------------------------------------------------------------------
+def create_dark_text_post(text: str, output_path="post.jpg") -> str:
     width, height = 1080, 1350
-    image = Image.new("RGB", (width, height), DARK_BG)
+    image = Image.new("RGB", (width, height), (21, 32, 43))  # Dark background
     draw = ImageDraw.Draw(image)
 
-    # Fonts
+    # Improved font handling with multiple fallbacks - OpenSans focused
+    font_size = 72
     try:
-        font = ImageFont.truetype("arial.ttf", 72)   # big readable font
-        name_font = ImageFont.truetype("arialbd.ttf", 42)
-        handle_font = ImageFont.truetype("arial.ttf", 32)
-    except:
-        font = ImageFont.load_default()
-        name_font = handle_font = font
-
-    # Profile image
-    try:
-        pfp = Image.open(PROFILE_IMG).convert("RGB").resize((100, 100))
-        mask = Image.new("L", (100, 100), 0)
-        ImageDraw.Draw(mask).ellipse((0, 0, 100, 100), fill=255)
-        image.paste(pfp, (50, 80), mask)
+        # First try: Our preferred OpenSans font
+        try:
+            font = ImageFont.truetype(FONT_PATH, font_size)
+            logger.info("Using OpenSans_Condensed-Medium.ttf from project fonts")
+        except IOError:
+            # Second try: System might have OpenSans installed
+            try:
+                font = ImageFont.truetype("OpenSans-CondensedMedium.ttf", font_size)
+                logger.info("Using system OpenSans-CondensedMedium.ttf")
+            except IOError:
+                # Third try: Alternative naming
+                try:
+                    font = ImageFont.truetype("OpenSansCondensed-Medium.ttf", font_size)
+                    logger.info("Using OpenSansCondensed-Medium.ttf")
+                except IOError:
+                    # Fourth try: Common Linux fonts as fallback
+                    try:
+                        font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", font_size)
+                        logger.info("Using DejaVuSans-Bold as fallback")
+                    except IOError:
+                        # Final fallback to default font
+                        logger.warning("Using default font - may affect image quality")
+                        font = ImageFont.load_default()
+                        # Try to set size for default font
+                        try:
+                            font.size = font_size
+                        except:
+                            pass
     except Exception as e:
-        logger.warning(f"⚠️ Could not load profile image: {e}")
-        draw.ellipse([50, 80, 150, 180], fill=(29, 161, 242))
+        logger.warning(f"Font loading issues: {e}")
+        font = ImageFont.load_default()
 
-    # Name + handle
-    draw.text((170, 90), "Carnival Companion", font=name_font, fill=WHITE)
-    draw.text((170, 135), "@CarnivalCompanion", font=handle_font, fill=MUTED)
+    logger.info(f"Font properties: size={getattr(font, 'size', 'unknown')}")
 
-    # Main content
-    wrapped_lines = textwrap.wrap(text, width=18)
-    y_text = 280
-    for line in wrapped_lines:
-        draw.text((60, y_text), line, font=font, fill=WHITE)
-        y_text += font.size + 25
+    # Wrap text with appropriate width
+    wrapped = textwrap.wrap(text, width=18)
+    logger.info(f"Text wrapped into {len(wrapped)} lines")
+
+    # Calculate text position to center vertically
+    line_height = 80  # Fixed line height for consistency
+    total_text_height = len(wrapped) * line_height
+    y = (height - total_text_height) // 2
+    
+    logger.info(f"Text positioning: y={y}, total_height={total_text_height}")
+    
+    for line in wrapped:
+        # Calculate text width to center horizontally
+        bbox = draw.textbbox((0, 0), line, font=font)
+        text_width = bbox[2] - bbox[0]
+        x = (width - text_width) // 2
+        draw.text((x, y), line, font=font, fill=(255, 255, 255))
+        y += line_height
+
+    # Profile image handling
+    try:
+        pfp = Image.open(PROFILE_IMG).convert("RGB")
+        # Resize with proper aspect ratio
+        pfp_size = (120, 120)
+        pfp = pfp.resize(pfp_size, Image.Resampling.LANCZOS)
+        
+        # Create circular mask
+        mask = Image.new("L", pfp_size, 0)
+        draw_mask = ImageDraw.Draw(mask)
+        draw_mask.ellipse((0, 0, pfp_size[0], pfp_size[1]), fill=255)
+        
+        # Position profile image
+        image.paste(pfp, (80, 100), mask)
+        logger.info("Profile image added successfully")
+    except Exception as e:
+        logger.warning(f"Profile image not loaded: {e}")
 
     image.save(output_path, "JPEG", quality=95)
-    logger.info(f"✅ Created Instagram-style image: {output_path}")
+    
+    # Debug: Check image dimensions
+    img = Image.open(output_path)
+    logger.info(f"Final image size: {img.size}")  # Should be (1080, 1350)
+    
     return output_path
 
+# ------------------------------------------------------------------------------
+# Posting Logic
+# ------------------------------------------------------------------------------
+def create_and_post(cl: Client):
+    try:
+        trivia = read_content(TRIVIA_FILE)
+        slang = read_content(SLANG_FILE)
+        if not trivia and not slang:
+            logger.error("No content in trivia.txt or slang.txt")
+            return
+
+        content = random.choice(trivia or slang)
+        logger.info(f"Selected content: {content[:50]}...")
+        raw_path = create_dark_text_post(content, f"post_{int(time.time())}.jpg")
+        caption = f"{content}\n\n#CarnivalCompanion #Caribbean"
+
+        try:
+            cl.photo_upload(raw_path, caption)
+            logger.info(f"✅ Posted: {content[:50]}...")
+        except Exception as e:
+            logger.error(f"Upload failed: {e}")
+            if login_user(cl):
+                cl.photo_upload(raw_path, caption)
+
+        os.remove(raw_path)
+        logger.info(f"🗑️ Removed temp: {raw_path}")
+
+        schedule_next_post(cl)
+    except LoginRequired:
+        logger.info("Session expired — re-logging...")
+        if login_user(cl):
+            schedule_next_post(cl)
+    except Exception as e:
+        logger.error(f"Error in posting loop: {e}")
+        time.sleep(300)
+        schedule_next_post(cl)
 
 def get_random_peak_time() -> datetime:
     now = datetime.now()
     peak_windows = [(9, 11), (17, 19), (20, 22)]
     start, end = random.choice(peak_windows)
-    hour = random.randint(start, end - 1)
-    minute = random.randint(0, 59)
-    post_time = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+    post_time = now.replace(hour=random.randint(start, end-1), minute=random.randint(0, 59), second=0)
     if post_time <= now:
         post_time += timedelta(days=1)
     return post_time
 
-# ------------------------------------------------------------------------------
-# Posting Logic
-# ------------------------------------------------------------------------------
-
-def create_and_post(cl: Client):
-    try:
-        trivia_list = read_content(TRIVIA_FILE)
-        slang_list = read_content(SLANG_FILE)
-        if not trivia_list and not slang_list:
-            logger.error("No content found in trivia.txt or slang.txt")
-            return
-
-        post_count = random.randint(1, 2)
-        logger.info(f"Making {post_count} post(s) this session")
-
-        for i in range(post_count):
-            if random.choice([True, False]) and trivia_list:
-                content = random.choice(trivia_list)
-            elif slang_list:
-                content = random.choice(slang_list)
-            else:
-                content = random.choice(trivia_list)
-
-            raw_image_path = create_instagram_style_post(content, f"post_{int(time.time())}.jpg")
-            caption = f"{content}\n\n{get_peak_hashtags()}"
-
-            try:
-                cl.photo_upload(raw_image_path, caption)
-                logger.info(f"Posted: {content[:50]}...")
-            except Exception as e:
-                logger.error(f"Failed to upload: {e}")
-                if login_user(cl):
-                    try:
-                        cl.photo_upload(raw_image_path, caption)
-                        logger.info(f"Posted after relogin: {content[:50]}...")
-                    except Exception as e2:
-                        logger.error(f"Failed again after relogin: {e2}")
-                continue
-
-            try:
-                os.remove(raw_image_path)
-                logger.info(f"Removed temporary image: {raw_image_path}")
-            except:
-                pass
-
-            if i < post_count - 1:
-                delay = random.randint(1800, 3600)
-                logger.info(f"Waiting {delay//60} minutes before next post...")
-                time.sleep(delay)
-
-        schedule_next_post(cl)
-
-    except LoginRequired:
-        logger.info("Session expired, re-logging...")
-        if login_user(cl):
-            schedule_next_post(cl)
-    except Exception as e:
-        logger.error(f"Error in create_and_post: {e}")
-        time.sleep(300)
-        schedule_next_post(cl)
-
-
 def schedule_next_post(cl: Client):
     next_time = get_random_peak_time()
     delay = (next_time - datetime.now()).total_seconds()
-    logger.info(f"Next post scheduled for: {next_time} (in {delay/3600:.1f} hours)")
-
+    logger.info(f"📅 Next post scheduled: {next_time} (~{delay/3600:.1f}h)")
     schedule.clear()
     schedule.every(delay).seconds.do(lambda: create_and_post(cl))
 
 # ------------------------------------------------------------------------------
 # Main
 # ------------------------------------------------------------------------------
-
 def main():
     keep_alive()
-
     cl = Client()
     cl.delay_range = [1, 3]
 
-    try:
-        cl.load_settings("session.json")
-    except FileNotFoundError:
-        logger.info("No existing session file found")
-
     if not login_user(cl):
-        logger.error("Failed to login. Check your credentials in .env file")
         return
 
-    logger.info("Bot started ✅")
-    logger.info("Posting immediately to verify setup...")
+    logger.info("Bot started ✅ First post now...")
     create_and_post(cl)
 
     while True:
-        try:
-            schedule.run_pending()
-            time.sleep(60)
-        except Exception as e:
-            logger.error(f"Error in scheduler loop: {e}")
-            time.sleep(300)
+        schedule.run_pending()
+        time.sleep(60)
 
 if __name__ == "__main__":
     main()
