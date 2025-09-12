@@ -120,17 +120,17 @@ def get_peak_hashtags() -> str:
 
 
 def create_twitter_style_image(text: str, content_type: str, output_path="post.jpg") -> str:
-    """Generate a Twitter-style post image (1080x1080 square with Twitter blue theme)."""
-    width, height = 1080, 1080  # Square format
+    """Generate a clean Twitter-style post image (720x720 square with Twitter blue theme)."""
+    width, height = 720, 720  # Square format
     image = Image.new("RGB", (width, height), TWITTER_BG)
     draw = ImageDraw.Draw(image)
 
-    # Fonts - using larger sizes for better readability
+    # Fonts - scaled for 720x720
     try:
-        name_font = ImageFont.truetype("arialbd.ttf", 60)
-        handle_font = ImageFont.truetype("arial.ttf", 44)
-        text_font = ImageFont.truetype("arial.ttf", 58)
-        small_font = ImageFont.truetype("arial.ttf", 40)
+        name_font = ImageFont.truetype("arialbd.ttf", 40)
+        handle_font = ImageFont.truetype("arial.ttf", 32)
+        text_font = ImageFont.truetype("arial.ttf", 44)
+        small_font = ImageFont.truetype("arial.ttf", 32)
     except:
         # Fallback to default fonts if custom ones aren't available
         name_font = ImageFont.load_default()
@@ -139,9 +139,9 @@ def create_twitter_style_image(text: str, content_type: str, output_path="post.j
         small_font = ImageFont.load_default()
 
     # Profile section at top
-    profile_size = 100
-    profile_x = 80
-    profile_y = 80
+    profile_size = 80
+    profile_x = 50
+    profile_y = 50
 
     # Draw profile picture (circle)
     try:
@@ -155,15 +155,15 @@ def create_twitter_style_image(text: str, content_type: str, output_path="post.j
         draw.ellipse([profile_x, profile_y, profile_x + profile_size, profile_y + profile_size], fill=TWITTER_BLUE)
 
     # Account name and handle
-    draw.text((profile_x + profile_size + 20, profile_y + 10), "Carnival Companion", fill=TWITTER_TEXT, font=name_font)
-    draw.text((profile_x + profile_size + 20, profile_y + 70), "@CarnivalCompanion · 2h", fill=TWITTER_MUTED, font=handle_font)
+    draw.text((profile_x + profile_size + 15, profile_y + 8), "Carnival Companion", fill=TWITTER_TEXT, font=name_font)
+    draw.text((profile_x + profile_size + 15, profile_y + 52), "@CarnivalCompanion · 2h", fill=TWITTER_MUTED, font=handle_font)
 
     # Post content - centered with proper spacing
     content_x = profile_x
-    content_y = profile_y + profile_size + 60
+    content_y = profile_y + profile_size + 40
     
     # Wrap text to fit within image width
-    wrapped_lines = textwrap.wrap(text, width=30)  # Fewer characters for larger font
+    wrapped_lines = textwrap.wrap(text, width=28)
     
     # Draw each line of text
     for line in wrapped_lines:
@@ -171,38 +171,37 @@ def create_twitter_style_image(text: str, content_type: str, output_path="post.j
         line_width = text_font.getlength(line)
         line_x = (width - line_width) // 2
         draw.text((line_x, content_y), line, font=text_font, fill=TWITTER_TEXT)
-        content_y += text_font.size + 20  # Increase line spacing
+        content_y += text_font.size + 15
 
-    # Engagement section (likes, retweets)
-    engagement_y = content_y + 60
+    # Engagement section (likes, retweets) - SIMPLIFIED VERSION
+    engagement_y = content_y + 40
     
-    # Likes
+    # Simple text-based engagement (no icons that could cause red dots)
     likes = random.randint(500, 5000)
-    likes_x = width // 2 - 150
-    draw.text((likes_x, engagement_y), f"{likes:,}", fill=TWITTER_MUTED, font=small_font)
-    
-    # Retweets
     retweets = random.randint(500, 5000)
-    retweets_x = width // 2 + 50
-    draw.text((retweets_x, engagement_y), f"{retweets:,}", fill=TWITTER_MUTED, font=small_font)
+    
+    engagement_text = f"{likes:,} likes    {retweets:,} retweets"
+    engagement_width = small_font.getlength(engagement_text)
+    engagement_x = (width - engagement_width) // 2
+    
+    draw.text((engagement_x, engagement_y), engagement_text, fill=TWITTER_MUTED, font=small_font)
 
     # Hashtags at the bottom
-    hashtag_y = engagement_y + 80
+    hashtag_y = engagement_y + 50
     hashtags = get_peak_hashtags()
     hashtag_width = small_font.getlength(hashtags)
     hashtag_x = (width - hashtag_width) // 2
     draw.text((hashtag_x, hashtag_y), hashtags, fill=TWITTER_BLUE, font=small_font)
 
     image.save(output_path)
-    logger.info(f"Created Twitter-style image: {output_path}")
+    logger.info(f"Created clean Twitter-style image: {output_path}")
     return output_path
 
-
 def prepare_image(path: str, out_path: str) -> str:
-    """Crop + resize image to 1080x1080 for Instagram feed posts."""
+    """Crop + resize image to 720x720 for Instagram feed posts."""
     img = Image.open(path).convert("RGB")
 
-    target_w, target_h = 1080, 1080  # Square format
+    target_w, target_h = 720, 720  # Square format
 
     # Current aspect ratio
     w, h = img.size
@@ -221,7 +220,7 @@ def prepare_image(path: str, out_path: str) -> str:
         bottom = top + new_h
         img = img.crop((0, top, w, bottom))
 
-    # Final resize to 1080x1080
+    # Final resize to 720x720
     img = img.resize((target_w, target_h), Image.LANCZOS)
     img.save(out_path, "JPEG", quality=95)
     return out_path
