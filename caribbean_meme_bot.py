@@ -23,30 +23,11 @@ from dotenv import load_dotenv
 # Flask
 from flask import Flask
 
-
-
-
-if os.path.exists("session.json"):
-    logger.info("🔑 Loading existing Instagram session...")
-    cl.load_settings("session.json")
-    try:
-        cl.get_timeline_feed()  # test if still valid
-        logger.info("✅ Session still valid, no login needed")
-    except Exception:
-        logger.warning("⚠️ Session expired, logging in fresh...")
-        cl.login(USERNAME, PASSWORD)
-        cl.dump_settings("session.json")
-else:
-    logger.info("No saved session.json, logging in fresh...")
-    cl.login(USERNAME, PASSWORD)
-    cl.dump_settings("session.json")
-
-
-
-
-
-
-
+# ------------------------------------------------------------------------------
+# Setup Logger FIRST
+# ------------------------------------------------------------------------------
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger("caribbean_meme_bot")
 
 # ------------------------------------------------------------------------------
 # Flask keep-alive server
@@ -67,11 +48,8 @@ def keep_alive():
     t.start()
 
 # ------------------------------------------------------------------------------
-# Setup
+# Load environment variables
 # ------------------------------------------------------------------------------
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-logger = logging.getLogger("caribbean_meme_bot")
-
 load_dotenv()
 USERNAME = os.getenv("IG_USERNAME")
 PASSWORD = os.getenv("IG_PASSWORD")
@@ -135,45 +113,45 @@ def create_dark_text_post(text: str, output_path="post.jpg") -> str:
     image = Image.new("RGB", (width, height), (21, 32, 43))  # dark background
     draw = ImageDraw.Draw(image)
 
-    # Fonts - Smaller sizes for better wrapping
+    # Fonts - EXACT sizes from preview
     try:
         # Try Arial fonts first
-        name_font = ImageFont.truetype("Arial Bold.ttf", 48)        # Smaller: 48px instead of 52px
-        handle_font = ImageFont.truetype("Arial.ttf", 36)           # Smaller: 36px instead of 40px
-        text_font = ImageFont.truetype("Arial Bold.ttf", 56)        # Smaller: 56px instead of 64px
-        header_font = ImageFont.truetype("Arial Bold.ttf", 72)      # Smaller: 72px instead of 80px
+        name_font = ImageFont.truetype("Arial Bold.ttf", 52)
+        handle_font = ImageFont.truetype("Arial.ttf", 40)
+        text_font = ImageFont.truetype("Arial.ttf", 64)
+        header_font = ImageFont.truetype("Arial Bold.ttf", 80)
     except:
         try:
             # Try alternative font names
-            name_font = ImageFont.truetype("arialbd.ttf", 48)
-            handle_font = ImageFont.truetype("arial.ttf", 36)
-            text_font = ImageFont.truetype("arialbd.ttf", 56)
-            header_font = ImageFont.truetype("arialbd.ttf", 72)
+            name_font = ImageFont.truetype("arialbd.ttf", 52)
+            handle_font = ImageFont.truetype("arial.ttf", 40)
+            text_font = ImageFont.truetype("arial.ttf", 64)
+            header_font = ImageFont.truetype("arialbd.ttf", 80)
         except:
             # Final fallback to default font
             name_font = handle_font = text_font = header_font = ImageFont.load_default()
 
-    # Display name and handle
+    # EXACT text from preview
     display_name = "Carnival Companion"
     handle = "@carnivalcompanion · now"
 
-    # Adjusted positions - profile picture closer to text
-    y = 220  # Moved up slightly
+    # EXACT positions from preview
+    y = 250
     x_margin = 80
     pfp_size = 100
 
-    # 1. "CARNIVAL" HEADER - Large text at top center
+    # 1. "CARNIVAL" HEADER - EXACT from preview (top center)
     header_text = "CARNIVAL"
     try:
         bbox = draw.textbbox((0, 0), header_text, font=header_font)
         header_width = bbox[2] - bbox[0]
         header_x = (width - header_width) // 2
-        draw.text((header_x, 90), header_text, font=header_font, fill=(255, 255, 255))  # Moved up slightly
+        draw.text((header_x, 100), header_text, font=header_font, fill=(255, 255, 255))
     except:
         # Manual fallback positioning
-        draw.text((width//2 - 160, 90), header_text, fill=(255, 255, 255))
+        draw.text((width//2 - 180, 100), header_text, fill=(255, 255, 255))
 
-    # 2. PROFILE PICTURE - Closer to text body
+    # 2. PROFILE PICTURE - EXACT position from preview (left side)
     try:
         if os.path.exists(PROFILE_IMG):
             pfp = Image.open(PROFILE_IMG).convert("RGB").resize((pfp_size, pfp_size))
@@ -182,27 +160,28 @@ def create_dark_text_post(text: str, output_path="post.jpg") -> str:
             ImageDraw.Draw(mask).ellipse((0, 0, pfp_size, pfp_size), fill=255)
             image.paste(pfp, (x_margin, y), mask)
         else:
-            # Draw blue placeholder circle
+            # Draw blue placeholder circle (EXACT from preview)
             draw.ellipse((x_margin, y, x_margin+pfp_size, y+pfp_size), fill=(29, 155, 240))
     except Exception as e:
         logger.warning(f"Profile image error: {e}")
         draw.ellipse((x_margin, y, x_margin+pfp_size, y+pfp_size), fill=(29, 155, 240))
 
-    # 3. DISPLAY NAME - Left-aligned
+    # 3. DISPLAY NAME - EXACT from preview (right of profile)
     draw.text((x_margin+120, y), display_name, font=name_font, fill=(255, 255, 255))
 
-    # 4. HANDLE - Left-aligned in gray
-    draw.text((x_margin+120, y+55), handle, font=handle_font, fill=(136, 153, 166))  # Tighter spacing
+    # 4. HANDLE - EXACT from preview (below name, gray color)
+    draw.text((x_margin+120, y+60), handle, font=handle_font, fill=(136, 153, 166))
 
-    # 5. MAIN TEXT - Left-aligned with wider wrapping (40 characters)
-    wrapped_lines = textwrap.wrap(text, width=40)  # Increased from 30 to 40 characters
-    y_text = y + pfp_size + 20  # Closer to profile section (reduced from 160 to 120)
+    # 5. MAIN TEXT - EXACT wrapping and positioning from preview
+    # Wrap text EXACTLY like preview (width=30 characters)
+    wrapped_lines = textwrap.wrap(text, width=30)
+    y_text = y + 160  # EXACT spacing from preview
     
     for line in wrapped_lines:
-        # STRICTLY LEFT-ALIGNED text at x_margin
+        # LEFT-ALIGNED text at exact position from preview
         draw.text((x_margin, y_text), line, font=text_font, fill=(255, 255, 255))
-        # Tighter line spacing
-        y_text += 70  # Reduced from 84 to 70 (smaller font + tighter spacing)
+        # EXACT line spacing from preview
+        y_text += 84  # 64px font + 20px spacing = 84px
 
     # Save image
     image.save(output_path, "JPEG", quality=95)
