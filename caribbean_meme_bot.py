@@ -60,11 +60,11 @@ TRIVIA_FILE = "trivia.txt"
 SLANG_FILE = "slang.txt"
 PROFILE_IMG = "placeholder.jpg"
 
-# Colors (Twitter dark mode)
-TWITTER_BG = (21, 32, 43)
-TWITTER_TEXT = (255, 255, 255)
-TWITTER_MUTED = (136, 153, 166)
-TWITTER_BLUE = (29, 161, 242)
+# Colors for Instagram-style images
+INSTAGRAM_BG = (255, 255, 255)  # White background
+INSTAGRAM_TEXT = (0, 0, 0)      # Black text
+INSTAGRAM_MUTED = (142, 142, 142)  # Gray text
+INSTAGRAM_BLUE = (56, 151, 240)    # Instagram blue
 
 # Hashtags
 CARIBBEAN_HASHTAGS = [
@@ -75,6 +75,7 @@ CARIBBEAN_HASHTAGS = [
     "#CaribbeanTravel", "#CaribbeanStyle", "#CaribbeanLife",
     "#CaribbeanVibes", "#WestIndies", "#IslandTime", "#CaribbeanDream"
 ]
+
 # ------------------------------------------------------------------------------
 # Helpers
 # ------------------------------------------------------------------------------
@@ -118,119 +119,121 @@ def get_peak_hashtags() -> str:
     return " ".join(random.sample(CARIBBEAN_HASHTAGS, 4)) + " #CarnivalCompanion"
 
 
-def create_twitter_style_image(text: str, content_type: str, output_path="post.jpg") -> str:
-    """Generate a Twitter-style post image (1080x1350 portrait, vertically centered)."""
-    width, height = 1080, 1350
-    image = Image.new("RGB", (width, height), TWITTER_BG)
+def create_instagram_style_image(text: str, content_type: str, output_path="post.jpg") -> str:
+    """Generate an Instagram-style post image (1080x1080 square)."""
+    width, height = 1080, 1080  # Square format for Instagram
+    image = Image.new("RGB", (width, height), INSTAGRAM_BG)
     draw = ImageDraw.Draw(image)
 
-    # Fonts (scaled up)
+    # Fonts - using larger sizes for better readability
     try:
+        # Try to load fonts - adjust these based on what's available on your system
         name_font = ImageFont.truetype("arialbd.ttf", 42)
         handle_font = ImageFont.truetype("arial.ttf", 34)
-        text_font = ImageFont.truetype("arial.ttf", 40)
+        text_font = ImageFont.truetype("arial.ttf", 46)  # Larger text size
         small_font = ImageFont.truetype("arial.ttf", 32)
+        engagement_font = ImageFont.truetype("arial.ttf", 28)
     except:
-        name_font = handle_font = text_font = small_font = ImageFont.load_default()
+        # Fallback to default fonts if custom ones aren't available
+        name_font = ImageFont.load_default()
+        handle_font = ImageFont.load_default()
+        text_font = ImageFont.load_default()
+        small_font = ImageFont.load_default()
+        engagement_font = ImageFont.load_default()
 
-    # Wrap text
-    wrapped_lines = textwrap.wrap(text, width=50)
+    # Profile section at top
+    profile_size = 80
+    profile_x = 40
+    profile_y = 40
 
-    # Measure text height
-    text_height = sum(text_font.size + 14 for _ in wrapped_lines)
-
-    # Fixed block sizes
-    profile_h = 120 + 40   # profile pic + spacing
-    engagement_h = 100     # likes/retweets block
-    hashtags_h = 80        # hashtags at bottom
-
-    block_height = profile_h + text_height + engagement_h + hashtags_h
-
-    # Top margin so the block is vertically centered
-    top_y = (height - block_height) // 2
-
-    offset_x = 80  # left padding
-
-    # Profile image
+    # Draw profile picture (circle)
     try:
         pfp_path = os.path.join(os.path.dirname(__file__), PROFILE_IMG)
-        pfp = Image.open(pfp_path).convert("RGB").resize((120, 120))
-        mask = Image.new("L", (120, 120), 0)
-        ImageDraw.Draw(mask).ellipse((0, 0, 120, 120), fill=255)
-        image.paste(pfp, (offset_x, top_y), mask)
+        pfp = Image.open(pfp_path).convert("RGB").resize((profile_size, profile_size))
+        mask = Image.new("L", (profile_size, profile_size), 0)
+        ImageDraw.Draw(mask).ellipse((0, 0, profile_size, profile_size), fill=255)
+        image.paste(pfp, (profile_x, profile_y), mask)
     except Exception as e:
         logger.error(f"⚠️ Could not load profile image: {e}")
-        draw.ellipse([offset_x, top_y, offset_x + 120, top_y + 120], fill=TWITTER_BLUE)
+        draw.ellipse([profile_x, profile_y, profile_x + profile_size, profile_y + profile_size], fill=INSTAGRAM_BLUE)
 
-    # Name + handle
-    draw.text((offset_x + 140, top_y + 10), "Carnival Companion", fill=TWITTER_TEXT, font=name_font)
-    draw.text((offset_x + 140, top_y + 60), "@CarnivalCompanion · 2h", fill=TWITTER_MUTED, font=handle_font)
+    # Account name and handle
+    draw.text((profile_x + profile_size + 15, profile_y + 5), "carnivalcompanion", fill=INSTAGRAM_TEXT, font=name_font)
+    draw.text((profile_x + profile_size + 15, profile_y + 45), "@carnivalcompanion", fill=INSTAGRAM_MUTED, font=handle_font)
 
-    # Post text
-    y_text = top_y + 160
+    # More options icon (three dots)
+    options_x = width - 50
+    draw.ellipse([options_x, profile_y + 15, options_x + 4, profile_y + 19], fill=INSTAGRAM_TEXT)
+    draw.ellipse([options_x, profile_y + 25, options_x + 4, profile_y + 29], fill=INSTAGRAM_TEXT)
+    draw.ellipse([options_x, profile_y + 35, options_x + 4, options_x + 39], fill=INSTAGRAM_TEXT)
+
+    # Post content - centered with proper spacing
+    content_x = 40
+    content_y = profile_y + profile_size + 50
+    
+    # Wrap text to fit within image width
+    wrapped_lines = textwrap.wrap(text, width=35)  # Adjust character count for line breaks
+    
+    # Draw each line of text
     for line in wrapped_lines:
-        draw.text((offset_x, y_text), line, font=text_font, fill=TWITTER_TEXT)
-        y_text += text_font.size + 14
+        draw.text((content_x, content_y), line, font=text_font, fill=INSTAGRAM_TEXT)
+        content_y += text_font.size + 15  # Increase line spacing
 
-    # Engagement (likes/retweets)
-    y = y_text + 40
+    # Engagement section (likes, comments, etc.)
+    engagement_y = content_y + 40
+    
+    # Likes count
     likes = random.randint(500, 5000)
-    retweets = random.randint(500, 5000)
+    draw.text((content_x, engagement_y), f"{likes:,}", fill=INSTAGRAM_TEXT, font=engagement_font)
+    
+    # Comments icon and count
+    comments = random.randint(10, 500)
+    draw.text((content_x + 100, engagement_y), f"{comments}", fill=INSTAGRAM_TEXT, font=engagement_font)
+    
+    # Share icon (paper airplane)
+    draw.text((content_x + 200, engagement_y), "314", fill=INSTAGRAM_TEXT, font=engagement_font)  # Static share count
+    
+    # Bookmark icon
+    bookmark_x = width - 50
+    draw.rectangle([bookmark_x, engagement_y, bookmark_x + 20, engagement_y + 25], outline=INSTAGRAM_TEXT, width=2)
 
-    # Heart
-    heart_x, heart_y = offset_x + 60, y
-    draw.polygon(
-        [
-            (heart_x, heart_y + 24),
-            (heart_x + 18, heart_y),
-            (heart_x + 36, heart_y + 24),
-            (heart_x + 18, heart_y + 48),
-        ],
-        fill=TWITTER_MUTED,
-    )
-    draw.text((heart_x + 70, y), f"{likes:,}", fill=TWITTER_MUTED, font=small_font)
-
-    # Retweet
-    rt_x, rt_y = offset_x + 360, y + 10
-    draw.line([(rt_x, rt_y), (rt_x + 45, rt_y)], fill=TWITTER_MUTED, width=4)
-    draw.polygon([(rt_x + 45, rt_y), (rt_x + 40, rt_y - 6), (rt_x + 40, rt_y + 6)], fill=TWITTER_MUTED)
-    draw.line([(rt_x, rt_y + 28), (rt_x + 45, rt_y + 28)], fill=TWITTER_MUTED, width=4)
-    draw.polygon([(rt_x, rt_y + 28), (rt_x + 6, rt_y + 22), (rt_x + 6, rt_y + 34)], fill=TWITTER_MUTED)
-    draw.text((rt_x + 70, y), f"{retweets:,}", fill=TWITTER_MUTED, font=small_font)
-
-    # Hashtags at bottom of block
-    draw.text((offset_x, y + 80), get_peak_hashtags(), fill=TWITTER_BLUE, font=small_font)
+    # Timestamp and location
+    timestamp_y = engagement_y + 40
+    draw.text((content_x, timestamp_y), "2 hours ago", fill=INSTAGRAM_MUTED, font=small_font)
+    
+    # Add some hashtags at the bottom
+    hashtag_y = timestamp_y + 40
+    draw.text((content_x, hashtag_y), get_peak_hashtags(), fill=INSTAGRAM_BLUE, font=small_font)
 
     image.save(output_path)
-    logger.info(f"Created centered portrait image: {output_path}")
+    logger.info(f"Created Instagram-style image: {output_path}")
     return output_path
 
 
 def prepare_image(path: str, out_path: str) -> str:
-    """Crop + resize image to 1080x1350 for Instagram feed posts."""
+    """Crop + resize image to 1080x1080 for Instagram feed posts."""
     img = Image.open(path).convert("RGB")
 
-    target_w, target_h = 1080, 1350
-    aspect_ratio = target_w / target_h  # 0.8
+    target_w, target_h = 1080, 1080  # Square format
 
     # Current aspect ratio
     w, h = img.size
     current_ratio = w / h
 
-    if current_ratio > aspect_ratio:
+    if current_ratio > 1:
         # Image too wide → crop width
-        new_w = int(h * aspect_ratio)
+        new_w = h
         left = (w - new_w) // 2
         right = left + new_w
         img = img.crop((left, 0, right, h))
     else:
         # Image too tall → crop height
-        new_h = int(w / aspect_ratio)
+        new_h = w
         top = (h - new_h) // 2
         bottom = top + new_h
         img = img.crop((0, top, w, bottom))
 
-    # Final resize to 1080x1350
+    # Final resize to 1080x1080
     img = img.resize((target_w, target_h), Image.LANCZOS)
     img.save(out_path, "JPEG", quality=95)
     return out_path
@@ -272,34 +275,28 @@ def create_and_post(cl: Client):
             else:
                 content, ctype = random.choice(trivia_list), "trivia"
 
-            # Create and prepare the image
-            raw_image_path = create_twitter_style_image(content, ctype, f"post_{int(time.time())}.jpg")
-            prepared_path = prepare_image(raw_image_path, f"prepared_{int(time.time())}.jpg")
-            caption = f"{content}\n\n{get_peak_hashtags()}"
+            # Create the Instagram-style image
+            image_path = create_instagram_style_image(content, ctype, f"post_{int(time.time())}.jpg")
+            
+            # For Instagram, we'll use just hashtags in the caption
+            caption = get_peak_hashtags()
 
             try:
-                cl.photo_upload(prepared_path, caption)
+                cl.photo_upload(image_path, caption)
                 logger.info(f"Posted: {content[:50]}...")
             except Exception as e:
                 logger.error(f"Failed to upload: {e}")
                 if login_user(cl):
                     try:
-                        cl.photo_upload(prepared_path, caption)
+                        cl.photo_upload(image_path, caption)
                         logger.info(f"Posted after relogin: {content[:50]}...")
                     except Exception as e2:
                         logger.error(f"Failed again after relogin: {e2}")
                 continue
 
-            # Clean up temporary files
             try:
-                os.remove(raw_image_path)
-                logger.info(f"Removed temporary image: {raw_image_path}")
-            except:
-                pass
-                
-            try:
-                os.remove(prepared_path)
-                logger.info(f"Removed temporary image: {prepared_path}")
+                os.remove(image_path)
+                logger.info(f"Removed temporary image: {image_path}")
             except:
                 pass
 
@@ -361,4 +358,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
