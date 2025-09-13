@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------
-# Imports
+# Caribbean Meme Bot (Render-ready)
 # ------------------------------------------------------------------------------
 import os
 import random
@@ -10,27 +10,14 @@ import textwrap
 from datetime import datetime, timedelta
 from threading import Thread
 
-# Pillow
 from PIL import Image, ImageDraw, ImageFont
-
-# Instagram client
 from instagrapi import Client
 from instagrapi.exceptions import LoginRequired
-
-# Env
 from dotenv import load_dotenv
-
-# Flask
 from flask import Flask
 
 # ------------------------------------------------------------------------------
-# Setup Logger FIRST
-# ------------------------------------------------------------------------------
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-logger = logging.getLogger("caribbean_meme_bot")
-
-# ------------------------------------------------------------------------------
-# Flask keep-alive server
+# Flask keep-alive
 # ------------------------------------------------------------------------------
 app = Flask(__name__)
 
@@ -48,8 +35,14 @@ def keep_alive():
     t.start()
 
 # ------------------------------------------------------------------------------
-# Load environment variables
+# Setup
 # ------------------------------------------------------------------------------
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
+logger = logging.getLogger("caribbean_meme_bot")
+
 load_dotenv()
 USERNAME = os.getenv("IG_USERNAME")
 PASSWORD = os.getenv("IG_PASSWORD")
@@ -59,44 +52,52 @@ SLANG_FILE = "slang.txt"
 PROFILE_IMG = "placeholder.jpg"
 
 # ------------------------------------------------------------------------------
-# Helper Functions
+# Fonts (FreeSans)
+# ------------------------------------------------------------------------------
+def load_fonts():
+    try:
+        name_font = ImageFont.truetype("FreeSansBold.ttf", 52)
+        handle_font = ImageFont.truetype("FreeSans.ttf", 40)
+        text_font = ImageFont.truetype("FreeSans.ttf", 64)
+        return name_font, handle_font, text_font
+    except Exception as e:
+        logger.warning(f"⚠️ FreeSans not found, fallback to default: {e}")
+        f = ImageFont.load_default()
+        return f, f, f
+
+NAME_FONT, HANDLE_FONT, TEXT_FONT = load_fonts()
+
+# ------------------------------------------------------------------------------
+# Helpers
 # ------------------------------------------------------------------------------
 def ensure_image_size(image_path, expected_size=(1080, 1350)):
-    """Ensure image is exactly the expected size"""
     try:
         img = Image.open(image_path)
         if img.size != expected_size:
-            logger.warning(f"🔄 Resizing image from {img.size} to {expected_size}")
-            img_resized = img.resize(expected_size, Image.Resampling.LANCZOS)
-            img_resized.save(image_path, "JPEG", quality=95)
-            return True
-        return False
+            logger.warning(f"🔄 Resizing {img.size} -> {expected_size}")
+            img = img.resize(expected_size, Image.Resampling.LANCZOS)
+            img.save(image_path, "JPEG", quality=95)
     except Exception as e:
-        logger.error(f"Error in ensure_image_size: {e}")
-        return False
+        logger.error(f"Image resize failed: {e}")
 
 def login_user(client: Client) -> bool:
-    """Try session.json first, fallback to fresh login."""
     try:
         if os.path.exists("session.json"):
             client.load_settings("session.json")
             client.login(USERNAME, PASSWORD)
-            logger.info("Logged in using saved session.json ✅")
+            logger.info("Logged in using session.json ✅")
         else:
-            logger.info("No saved session.json, logging in fresh...")
+            logger.info("No session.json, logging in fresh...")
             client.login(USERNAME, PASSWORD)
             client.dump_settings("session.json")
             logger.info("New session.json saved ✅")
 
-        if client.user_id:
-            logger.info("Instagram login success 🎉")
-            return True
-        return False
+        return bool(client.user_id)
     except Exception as e:
         logger.error(f"Login failed ❌: {e}")
         return False
 
-def read_content(file_path: str) -> list[str]:
+def read_content(file_path: str):
     try:
         with open(file_path, "r", encoding="utf-8") as f:
             return [line.strip() for line in f if line.strip()]
@@ -105,95 +106,53 @@ def read_content(file_path: str) -> list[str]:
         return []
 
 # ------------------------------------------------------------------------------
-# Image Generator - EXACT Preview Style
+# Image Generator (Twitter-style dark post)
 # ------------------------------------------------------------------------------
 def create_dark_text_post(text: str, output_path="post.jpg") -> str:
-    # Canvas size (Instagram 4:5 ratio)
     width, height = 1080, 1350
-    image = Image.new("RGB", (width, height), (21, 32, 43))  # dark background
+    bg_color = (21, 32, 43)  # Twitter dark background
+    image = Image.new("RGB", (width, height), bg_color)
     draw = ImageDraw.Draw(image)
 
-    # Fonts - EXACT sizes from preview
-    try:
-        # Try Arial fonts first
-        name_font = ImageFont.truetype("Arial Bold.ttf", 52)
-        handle_font = ImageFont.truetype("Arial.ttf", 40)
-        text_font = ImageFont.truetype("Arial.ttf", 64)
-        header_font = ImageFont.truetype("Arial Bold.ttf", 80)
-    except:
-        try:
-            # Try alternative font names
-            name_font = ImageFont.truetype("arialbd.ttf", 52)
-            handle_font = ImageFont.truetype("arial.ttf", 40)
-            text_font = ImageFont.truetype("arial.ttf", 64)
-            header_font = ImageFont.truetype("arialbd.ttf", 80)
-        except:
-            # Final fallback to default font
-            name_font = handle_font = text_font = header_font = ImageFont.load_default()
-
-    # EXACT text from preview
     display_name = "Carnival Companion"
     handle = "@carnivalcompanion · now"
 
-    # EXACT positions from preview
-    y = 250
     x_margin = 80
+    y = 250
     pfp_size = 100
 
-    # 1. "CARNIVAL" HEADER - EXACT from preview (top center)
-    header_text = "CARNIVAL"
-    try:
-        bbox = draw.textbbox((0, 0), header_text, font=header_font)
-        header_width = bbox[2] - bbox[0]
-        header_x = (width - header_width) // 2
-        draw.text((header_x, 100), header_text, font=header_font, fill=(255, 255, 255))
-    except:
-        # Manual fallback positioning
-        draw.text((width//2 - 180, 100), header_text, fill=(255, 255, 255))
-
-    # 2. PROFILE PICTURE - EXACT position from preview (left side)
+    # Profile picture (circle left)
     try:
         if os.path.exists(PROFILE_IMG):
             pfp = Image.open(PROFILE_IMG).convert("RGB").resize((pfp_size, pfp_size))
-            # Create circular mask
             mask = Image.new("L", (pfp_size, pfp_size), 0)
             ImageDraw.Draw(mask).ellipse((0, 0, pfp_size, pfp_size), fill=255)
             image.paste(pfp, (x_margin, y), mask)
         else:
-            # Draw blue placeholder circle (EXACT from preview)
-            draw.ellipse((x_margin, y, x_margin+pfp_size, y+pfp_size), fill=(29, 155, 240))
+            draw.ellipse((x_margin, y, x_margin+pfp_size, y+pfp_size),
+                         fill=(29, 155, 240))
     except Exception as e:
         logger.warning(f"Profile image error: {e}")
-        draw.ellipse((x_margin, y, x_margin+pfp_size, y+pfp_size), fill=(29, 155, 240))
+        draw.ellipse((x_margin, y, x_margin+pfp_size, y+pfp_size),
+                     fill=(29, 155, 240))
 
-    # 3. DISPLAY NAME - EXACT from preview (right of profile)
-    draw.text((x_margin+120, y), display_name, font=name_font, fill=(255, 255, 255))
+    # Display name + handle
+    draw.text((x_margin+120, y), display_name, font=NAME_FONT, fill=(255, 255, 255))
+    draw.text((x_margin+120, y+60), handle, font=HANDLE_FONT, fill=(136, 153, 166))
 
-    # 4. HANDLE - EXACT from preview (below name, gray color)
-    draw.text((x_margin+120, y+60), handle, font=handle_font, fill=(136, 153, 166))
+    # Main wrapped text
+    wrapped = textwrap.wrap(text, width=30)
+    y_text = y + 160
+    for line in wrapped:
+        draw.text((x_margin, y_text), line, font=TEXT_FONT, fill=(255, 255, 255))
+        y_text += 74  # tighter spacing than before
 
-    # 5. MAIN TEXT - EXACT wrapping and positioning from preview
-    # Wrap text EXACTLY like preview (width=30 characters)
-    wrapped_lines = textwrap.wrap(text, width=30)
-    y_text = y + 160  # EXACT spacing from preview
-    
-    for line in wrapped_lines:
-        # LEFT-ALIGNED text at exact position from preview
-        draw.text((x_margin, y_text), line, font=text_font, fill=(255, 255, 255))
-        # EXACT line spacing from preview
-        y_text += 84  # 64px font + 20px spacing = 84px
-
-    # Save image
     image.save(output_path, "JPEG", quality=95)
-    logger.info(f"💾 Image saved to: {output_path}")
-    
-    # Force correct dimensions
     ensure_image_size(output_path, (width, height))
-    
     return output_path
 
 # ------------------------------------------------------------------------------
-# Posting Logic
+# Posting logic
 # ------------------------------------------------------------------------------
 def create_and_post(cl: Client):
     try:
@@ -204,95 +163,84 @@ def create_and_post(cl: Client):
             return
 
         content = random.choice(trivia or slang)
-        logger.info(f"📄 Selected content: {content}")
-        
-        timestamp = int(time.time())
-        raw_path = f"post_{timestamp}.jpg"
-        
-        raw_path = create_dark_text_post(content, raw_path)
+        logger.info(f"📄 Selected: {content}")
+
+        filename = f"post_{int(time.time())}.jpg"
+        path = create_dark_text_post(content, filename)
         caption = f"{content}\n\n#CarnivalCompanion #Caribbean #IslandLife #Trivia"
 
         try:
-            cl.photo_upload(raw_path, caption)
-            logger.info(f"✅ Posted successfully!")
+            cl.photo_upload(path, caption)
+            logger.info("✅ Post successful")
         except Exception as e:
-            logger.error(f"❌ Upload failed: {e}")
+            logger.error(f"Upload failed: {e}")
             if login_user(cl):
-                try:
-                    cl.photo_upload(raw_path, caption)
-                    logger.info(f"✅ Re-upload successful after re-login")
-                except Exception as retry_error:
-                    logger.error(f"❌ Re-upload also failed: {retry_error}")
+                cl.photo_upload(path, caption)
+                logger.info("✅ Retry post successful")
 
-        # Clean up temp file
-        if os.path.exists(raw_path):
-            os.remove(raw_path)
-            logger.info(f"🗑️ Removed temp file")
+        if os.path.exists(path):
+            os.remove(path)
+            logger.info("🗑️ Temp file removed")
 
         schedule_next_post(cl)
-        
+
     except LoginRequired:
-        logger.info("🔐 Session expired — re-logging...")
+        logger.info("🔐 Session expired, re-login...")
         if login_user(cl):
             schedule_next_post(cl)
     except Exception as e:
-        logger.error(f"❌ Error in posting loop: {e}")
+        logger.error(f"Error in posting: {e}")
         time.sleep(300)
         schedule_next_post(cl)
 
-def get_random_peak_time() -> datetime:
+def get_random_peak_time():
     now = datetime.now()
-    peak_windows = [(9, 11), (17, 19), (20, 22)]
-    start, end = random.choice(peak_windows)
-    post_time = now.replace(
-        hour=random.randint(start, end-1), 
-        minute=random.randint(0, 59), 
-        second=0, 
-        microsecond=0
-    )
-    if post_time <= now:
-        post_time += timedelta(days=1)
-    return post_time
+    peaks = [(9, 11), (17, 19), (20, 22)]
+    start, end = random.choice(peaks)
+    t = now.replace(hour=random.randint(start, end-1),
+                    minute=random.randint(0, 59),
+                    second=0, microsecond=0)
+    if t <= now:
+        t += timedelta(days=1)
+    return t
 
 def schedule_next_post(cl: Client):
     next_time = get_random_peak_time()
     delay = (next_time - datetime.now()).total_seconds()
-    logger.info(f"📅 Next post scheduled: {next_time} (~{delay/3600:.1f} hours)")
+    logger.info(f"📅 Next post at {next_time} (~{delay/3600:.1f}h)")
     schedule.clear()
     schedule.every(delay).seconds.do(lambda: create_and_post(cl))
 
 # ------------------------------------------------------------------------------
-# Main Execution
+# Main
 # ------------------------------------------------------------------------------
 def main():
     logger.info("🚀 Starting Caribbean Meme Bot...")
     keep_alive()
-    
-    # Verify environment
+
     if not USERNAME or not PASSWORD:
-        logger.error("❌ Missing Instagram credentials in environment variables")
+        logger.error("❌ Missing IG credentials in environment")
         return
-    
+
     cl = Client()
     cl.delay_range = [1, 3]
 
     if not login_user(cl):
-        logger.error("❌ Failed to login to Instagram")
+        logger.error("❌ Login failed")
         return
 
-    logger.info("✅ Bot started successfully! First post now...")
+    logger.info("✅ Bot ready, posting first meme...")
     create_and_post(cl)
 
-    # Main loop
     while True:
         try:
             schedule.run_pending()
             time.sleep(60)
         except KeyboardInterrupt:
-            logger.info("⏹️ Bot stopped by user")
+            logger.info("⏹️ Stopped by user")
             break
         except Exception as e:
-            logger.error(f"❌ Error in main loop: {e}")
+            logger.error(f"Main loop error: {e}")
             time.sleep(300)
 
 if __name__ == "__main__":
