@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------
-# Caribbean Meme Bot (Stealth Edition) - Full corrected script
+# Caribbean Meme Bot (Toggle Edition) - Easily switch between content modes
 # ------------------------------------------------------------------------------
 import os
 import random
@@ -17,6 +17,12 @@ from instagrapi import Client
 from instagrapi.exceptions import LoginRequired, ChallengeRequired
 from dotenv import load_dotenv
 from flask import Flask
+
+# ------------------------------------------------------------------------------
+# Configuration - EASY TOGGLE HERE
+# ------------------------------------------------------------------------------
+CONTENT_MODE = "trivia_only"  # ← CHANGE THIS TO SWITCH MODES
+# Options: "trivia_only", "slang_only", "both"
 
 # ------------------------------------------------------------------------------
 # Flask app (health endpoint only)
@@ -298,8 +304,26 @@ def create_dark_text_post(text: str, output_path="post.jpg") -> str:
     return output_path
 
 # ------------------------------------------------------------------------------
-# Posting logic
+# Posting logic - TOGGLE VERSION
 # ------------------------------------------------------------------------------
+def get_content_pool():
+    """Returns content based on the current CONTENT_MODE"""
+    trivia = read_content(TRIVIA_FILE)
+    slang = read_content(SLANG_FILE)
+    
+    if CONTENT_MODE == "trivia_only":
+        logger.info("📚 Mode: Trivia Only")
+        return trivia, "trivia"
+    elif CONTENT_MODE == "slang_only":
+        logger.info("💬 Mode: Slang Only")
+        return slang, "slang"
+    elif CONTENT_MODE == "both":
+        logger.info("📚💬 Mode: Both Trivia & Slang")
+        return trivia + slang, "mixed"
+    else:
+        logger.warning(f"❓ Unknown mode '{CONTENT_MODE}', defaulting to trivia_only")
+        return trivia, "trivia"
+
 def create_and_post(cl: Client, human_behavior: HumanBehavior):
     try:
         if human_behavior.should_take_break():
@@ -307,14 +331,15 @@ def create_and_post(cl: Client, human_behavior: HumanBehavior):
 
         human_behavior.random_delay(60, 300)
 
-        trivia = read_content(TRIVIA_FILE)
-        slang = read_content(SLANG_FILE)
-        if not trivia and not slang:
-            logger.error("❌ No content available")
+        # Get content based on current mode
+        content_pool, content_type = get_content_pool()
+        
+        if not content_pool:
+            logger.error(f"❌ No {content_type} content available")
             return
 
-        content = random.choice(trivia + slang)
-        logger.info(f"📄 Selected: {content[:50]}...")
+        content = random.choice(content_pool)
+        logger.info(f"📄 Selected {content_type}: {content[:50]}...")
 
         filename = f"post_{int(time.time())}_{random.randint(1000,9999)}.jpg"
         path = create_dark_text_post(content, filename)
@@ -390,7 +415,7 @@ def schedule_next_post(cl: Client, human_behavior: HumanBehavior):
 # Main with Enhanced Stealth - FIXED PORT CONFLICT
 # ------------------------------------------------------------------------------
 def main():
-    logger.info("🚀 Starting Caribbean Meme Bot (Stealth Edition)...")
+    logger.info(f"🚀 Starting Caribbean Meme Bot ({CONTENT_MODE.replace('_', ' ').title()} Mode)...")
 
     if not USERNAME or not PASSWORD:
         logger.error("❌ Missing IG credentials")
@@ -408,7 +433,7 @@ def main():
         logger.error("❌ Initial login failed")
         return
 
-    logger.info("✅ Bot ready with stealth mode")
+    logger.info(f"✅ Bot ready with {CONTENT_MODE} mode")
     create_and_post(cl, human_behavior)
 
     while True:
