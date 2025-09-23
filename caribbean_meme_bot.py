@@ -1,6 +1,7 @@
 # ------------------------------------------------------------------------------
-# Caribbean Meme Bot (Stealth Edition)
+# Caribbean Meme Bot (Stealth Edition) - Full corrected script
 # ------------------------------------------------------------------------------
+
 import os
 import random
 import time
@@ -64,10 +65,16 @@ class HumanBehavior:
         self.last_action_time = 0
         self.action_count = 0
         self.daily_limit = random.randint(2, 4)  # Vary daily limits
+        self.startup_quick = True  # flag so first action is quick (for immediate startup post)
         
     def random_delay(self, min_sec=30, max_sec=120):
-        """Random delay between actions"""
-        delay = random.uniform(min_sec, max_sec)
+        """Random delay between actions; if startup_quick is True, be very short once."""
+        if self.startup_quick:
+            # small imperceptible delay for the immediate startup post
+            delay = random.uniform(0.2, 1.2)
+            self.startup_quick = False
+        else:
+            delay = random.uniform(min_sec, max_sec)
         time.sleep(delay)
         
     def typing_delay(self, text):
@@ -95,7 +102,7 @@ class HumanBehavior:
 # Advanced Session Management
 # ------------------------------------------------------------------------------
 def create_device_settings():
-    """Generate consistent device settings"""
+    """Generate consistent device settings (returns one of the device dicts)"""
     devices = [
         {
             "device_settings": {
@@ -127,29 +134,35 @@ def create_device_settings():
     return random.choice(devices)
 
 def save_secure_session(client, username):
-    """Encrypt session data before saving"""
-    session_data = client.get_settings()
-    session_str = json.dumps(session_data)
-    
-    # Simple obfuscation
-    encoded = session_str.encode('utf-8')
-    filename = hashlib.md5(f"{username}_{int(time.time())}".encode()).hexdigest()[:16] + ".session"
-    
-    with open(filename, 'wb') as f:
-        f.write(encoded[::-1])  # Reverse bytes for basic obfuscation
+    """Encrypt session data before saving to a consistent filename per username"""
+    try:
+        session_data = client.get_settings()
+        session_str = json.dumps(session_data)
         
-    return filename
+        # Simple obfuscation (reverse bytes) and save to username-specific file
+        encoded = session_str.encode('utf-8')
+        filename = f"{username}.session"
+        
+        with open(filename, 'wb') as f:
+            f.write(encoded[::-1])  # Reverse bytes for basic obfuscation
+            
+        return filename
+    except Exception as e:
+        logger.warning(f"Failed to save session: {e}")
+        return None
 
 def load_secure_session(client, username):
-    """Load and decrypt session data"""
-    session_files = [f for f in os.listdir('.') if f.endswith('.session')]
-    if not session_files:
-        return None
-        
-    latest_file = max(session_files, key=os.path.getctime)
+    """Load and decrypt session data for the given username"""
+    target_file = f"{username}.session"
+    # fallback: if specific file isn't present, try any .session (legacy)
+    if not os.path.exists(target_file):
+        session_files = [f for f in os.listdir('.') if f.endswith('.session')]
+        if not session_files:
+            return None
+        target_file = max(session_files, key=os.path.getctime)
     
     try:
-        with open(latest_file, 'rb') as f:
+        with open(target_file, 'rb') as f:
             encoded_data = f.read()
             
         session_str = encoded_data[::-1].decode('utf-8')  # Reverse de-obfuscation
@@ -157,7 +170,7 @@ def load_secure_session(client, username):
         client.set_settings(session_data)
         return True
     except Exception as e:
-        logger.warning(f"Session load failed: {e}")
+        logger.warning(f"Session load failed ({target_file}): {e}")
         return False
 
 # ------------------------------------------------------------------------------
@@ -190,37 +203,48 @@ def ensure_image_size(image_path, expected_size=(1080, 1350)):
         logger.error(f"Image resize failed: {e}")
 
 def advanced_login(client: Client, human_behavior: HumanBehavior) -> bool:
-    """Advanced login with human-like behavior and challenge handling"""
+    """Advanced login with human-like behavior and challenge handling.
+       Ensures single session reuse (no multiple simultaneous sessions)."""
     try:
-        human_behavior.random_delay(10, 30)  # Delay before login
+        human_behavior.random_delay(2, 6)  # small initial delay
         
-        # Try to load existing session first
-        if load_secure_session(client, USERNAME):
-            logger.info("Loaded existing session")
-            human_behavior.random_delay(5, 15)
-            
-            # Verify session is still valid
-            try:
-                client.get_timeline_feed()
-                logger.info("Session verified ✅")
-                return True
-            except (LoginRequired, ChallengeRequired):
-                logger.info("Session expired, need fresh login")
-                os.remove([f for f in os.listdir('.') if f.endswith('.session')][0])
+        # Try to load existing session for this username
+        if USERNAME:
+            loaded = load_secure_session(client, USERNAME)
+            if loaded:
+                logger.info("Loaded existing session (attempting verify)...")
+                try:
+                    client.get_timeline_feed()  # quick verify
+                    logger.info("Session verified ✅")
+                    return True
+                except (LoginRequired, ChallengeRequired, Exception) as e:
+                    logger.info(f"Session verify failed: {e}. Will attempt fresh login.")
+                    # keep going to fresh login
         
-        # Fresh login with device simulation
+        # Fresh login with device simulation (use set_device to avoid overwriting version_code)
         device_settings = create_device_settings()
-        client.set_settings(device_settings)
+        # set_device expects the inner device dict
+        if isinstance(device_settings, dict) and "device_settings" in device_settings:
+            client.set_device(device_settings["device_settings"])
+        else:
+            # fallback: try to set as device dict if provided directly
+            try:
+                client.set_device(device_settings)
+            except Exception:
+                pass
         
         logger.info("Performing fresh login...")
-        human_behavior.typing_delay(USERNAME)
+        human_behavior.typing_delay(USERNAME if USERNAME else "")
         client.login(USERNAME, PASSWORD)
         
-        # Save session securely
-        save_secure_session(client, USERNAME)
-        logger.info("New session created and saved ✅")
+        # Save session to username-specific file
+        saved = save_secure_session(client, USERNAME) if USERNAME else None
+        if saved:
+            logger.info(f"New session created and saved -> {saved}")
+        else:
+            logger.info("New session created (but saving failed)")
         
-        human_behavior.random_delay(10, 20)  # Delay after login
+        human_behavior.random_delay(6, 14)  # Delay after login
         return True
         
     except ChallengeRequired as e:
@@ -289,7 +313,8 @@ def create_and_post(cl: Client, human_behavior: HumanBehavior):
         if human_behavior.should_take_break():
             logger.info("🔄 Resuming after break...")
             
-        human_behavior.random_delay(60, 300)  # Delay before starting
+        # Random small delay before posting (startup_quick will make first call near-instant)
+        human_behavior.random_delay(60, 300)
         
         trivia = read_content(TRIVIA_FILE)
         slang = read_content(SLANG_FILE)
@@ -342,6 +367,7 @@ def create_and_post(cl: Client, human_behavior: HumanBehavior):
             os.remove(path)
             logger.info("🗑️ Temp file removed")
 
+        # After a successful post, schedule the next set of posts (2 per day)
         schedule_next_post(cl, human_behavior)
 
     except Exception as e:
@@ -349,45 +375,46 @@ def create_and_post(cl: Client, human_behavior: HumanBehavior):
         human_behavior.random_delay(300, 600)  # Longer delay on error
         schedule_next_post(cl, human_behavior)
 
-def get_random_peak_time():
-    """More varied posting times"""
-    now = datetime.now()
-    
-    # Wider time windows with more variation
-    peaks = [
+def get_random_peak_time_within_day():
+    """Return a random time (hour, minute) in the common posting window"""
+    # Variation windows across day
+    windows = [
         (8, 11),    # Morning
         (12, 14),   # Lunch
         (16, 19),   # Evening
         (20, 23)    # Night
     ]
-    
-    start, end = random.choice(peaks)
-    t = now.replace(
-        hour=random.randint(start, end-1),
-        minute=random.randint(0, 59),
-        second=0, 
-        microsecond=0
-    )
-    
-    # Add random day variation (sometimes post next day, sometimes same day)
-    if t <= now or random.random() < 0.3:
-        t += timedelta(days=random.randint(1, 2))
-        
-    return t
+    chosen = random.choice(windows)
+    hour = random.randint(chosen[0], chosen[1] - 1)
+    minute = random.randint(0, 59)
+    return hour, minute
 
 def schedule_next_post(cl: Client, human_behavior: HumanBehavior):
-    next_time = get_random_peak_time()
-    delay = (next_time - datetime.now()).total_seconds()
+    """
+    Schedule TWO posts per day at random times.
+    This clears current schedule and sets two daily times; after any post runs,
+    create_and_post will call this again to re-randomize the next two times.
+    """
+    now = datetime.now()
+    times = []
+    for _ in range(2):
+        h, m = get_random_peak_time_within_day()
+        # Build a timestring for schedule.every().day.at
+        t_str = f"{h:02d}:{m:02d}"
+        times.append(t_str)
     
-    # Add some randomness to the schedule
-    delay += random.uniform(-3600, 3600)  # ±1 hour variation
-    
-    logger.info(f"📅 Next post at {next_time} (~{delay/3600:.1f}h)")
     schedule.clear()
-    schedule.every(delay).seconds.do(lambda: create_and_post(cl, human_behavior))
+    for t_str in times:
+        # schedule to run daily at the chosen time
+        try:
+            # capture cl and human_behavior in the closure
+            schedule.every().day.at(t_str).do(lambda cl=cl, hb=human_behavior: create_and_post(cl, hb))
+            logger.info(f"📅 Scheduled daily post at {t_str}")
+        except Exception as e:
+            logger.warning(f"Failed to schedule at {t_str}: {e}")
 
 # ------------------------------------------------------------------------------
-# Main with Enhanced Stealth
+# Main with Enhanced Stealth (keeps structure similar to original)
 # ------------------------------------------------------------------------------
 def main():
     logger.info("🚀 Starting Caribbean Meme Bot (Stealth Edition)...")
@@ -414,9 +441,10 @@ def main():
         return
 
     logger.info("✅ Bot ready with stealth mode")
-    human_behavior.random_delay(60, 180)  # Initial delay
+    # Immediate separate post on startup (startup_quick in HumanBehavior makes this near-instant)
     create_and_post(cl, human_behavior)
 
+    # main loop — runs scheduled jobs and keeps bot alive
     while True:
         try:
             schedule.run_pending()
@@ -433,5 +461,14 @@ def main():
             logger.error(f"Main loop error: {e}")
             human_behavior.random_delay(300, 600)  # Long delay on error
 
+# ------------------------------------------------------------------------------
+# Entrypoint: run as script or start main in background for WSGI servers (gunicorn)
+# ------------------------------------------------------------------------------
 if __name__ == "__main__":
     main()
+else:
+    # If imported by a WSGI server (like gunicorn), spin up the bot in a background thread
+    try:
+        Thread(target=main, daemon=True).start()
+    except Exception as e:
+        logger.error(f"Failed to start bot in background: {e}")

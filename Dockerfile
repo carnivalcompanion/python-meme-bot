@@ -1,6 +1,6 @@
 FROM python:3.10-slim
 
-# Install system dependencies (FreeSans included here)
+# Install system dependencies (fonts, ffmpeg, etc.)
 RUN apt-get update && apt-get install -y \
     gcc \
     libjpeg-dev \
@@ -13,13 +13,14 @@ RUN apt-get update && apt-get install -y \
 # Install Python dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir gunicorn && \
     pip install --no-cache-dir -r requirements.txt
 
 # Copy bot code
 COPY . .
 
-# Expose port (Render sets PORT automatically, default 10000)
+# Expose port (Render assigns $PORT)
 EXPOSE 10000
 
-# Run the bot
-CMD ["python", "caribbean_meme_bot.py"]
+# Start Flask app with Gunicorn (this also triggers your bot in background)
+CMD ["gunicorn", "-w", "2", "-b", "0.0.0.0:10000", "caribbean_meme_bot:app"]
