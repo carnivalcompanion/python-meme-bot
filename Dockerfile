@@ -1,6 +1,5 @@
 FROM python:3.10-slim
 
-# Install system dependencies (fonts, ffmpeg, etc.)
 RUN apt-get update && apt-get install -y \
     gcc \
     libjpeg-dev \
@@ -10,17 +9,16 @@ RUN apt-get update && apt-get install -y \
     fonts-freefont-ttf \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies
+WORKDIR /app
+
 COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir gunicorn && \
     pip install --no-cache-dir -r requirements.txt
 
-# Copy bot code
 COPY . .
 
-# Expose port (Render assigns $PORT)
 EXPOSE 10000
 
-# Start Flask app with Gunicorn (this also triggers your bot in background)
-CMD ["gunicorn", "-w", "2", "-b", "0.0.0.0:10000", "caribbean_meme_bot:app"]
+# Use the script directly - it handles both Flask and bot
+CMD ["python", "caribbean_meme_bot.py"]
